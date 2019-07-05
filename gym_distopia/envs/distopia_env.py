@@ -149,8 +149,8 @@ class DistopiaEnv(gym.Env):
 
     def _update_state(self,district,block,old_loc,new_loc):
         self.districts[district][block] = new_loc
-        self.occupied[str(new_loc)] = True
-        self.occupied[str(old_loc)] = False
+        self.occupied[str(new_loc)] = (district,block)
+        self.occupied.pop(str(old_loc))
     
 
     def _apply_action(self, district, block, action):
@@ -184,6 +184,8 @@ class DistopiaEnv(gym.Env):
             # move south
             new_loc = block_location + (0, -1)
             if new_loc[1] < 0 or str(new_loc) in self.occupied:
+                import pdb
+                pdb.set_trace()
                 return False
             else:
                 self._update_state(district,block,block_location,new_loc)
@@ -268,7 +270,11 @@ class DistopiaEnv(gym.Env):
             observation (object): the initial observation.
         """
         if initial != None:
-            self.districts = initial
+            self.districts = deepcopy(initial)
+            self.occupied = {}
+            for district in self.districts:
+                for block in district:
+                    self.occupied[str(block)] = [district,block]
         else:
             if max_active == None:
                 max_active = self.BLOCKS_PER_DISTRICT
@@ -281,14 +287,13 @@ class DistopiaEnv(gym.Env):
                 ] for d in range(self.NUM_DISTRICTS)
             ]
 
-            for district in self.districts:
-                for block in district[:min_active]:
-                    block = self.place_block(self.occupied,active=True)
-                    self.occupied[str(block)] = True
-                for block in district[min_active:max_active]:
-                    block = self.place_block(self.occupied,active=None) # None-->don't force active, False-->force not active
-                    self.occupied[str(block)] = True
-
+            for i,district in enumerate(self.districts):
+                for j,block in enumerate(district[:min_active]):
+                    self.districts[i][j] = block = self.place_block(self.occupied,active=True)
+                    self.occupied[str(block)] = (district,block)
+                for k,block in enumerate(district[min_active:max_active],start=min_active):
+                    self.districts[i][k] = block = self.place_block(self.occupied,active=None) # None-->don't force active, False-->force not active
+                    self.occupied[str(block)] = (district,block)
         return self.districts
 
     def render(self, mode='human'):
