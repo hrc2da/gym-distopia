@@ -1,6 +1,7 @@
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+from distopia.app.agent import VornoiAgent
 
 class DistopiaEnv(gym.Env):
     """
@@ -25,8 +26,29 @@ class DistopiaEnv(gym.Env):
     metadata = {'render.modes': ['human']}
     NUM_DISTRICTS = 4
     BLOCKS_PER_DISTRICT = 3
-    GRID_WIDTH = 100 #width of a grid in pixels
+    GRID_WIDTH = 50 # width of a grid in pixels
+    PADDING = 100//GRID_WIDTH # px reserved for the "off-screen" blocks
     def __init__(self, screen_size):
+        '''
+        OBSERVATION (STATE) SPACE:
+        The state space for this environment is the x,y coordinates for each block
+        There are up to BLOCKS_PER_DISTRICT blocks for each district
+        The structure of the space is a TUPLE of districts, each composed of a TUPLE of blocks,
+        each composed of an (x,y) tuple
+
+        A note about the blocks: while all the blocks are represented in the space, not all must 
+        be in the config. To accomplish this, there is a space of 100 px (by default) padding in x.
+        When evaluating a config, we first subtract 100 px and strip out all blocks with a negative x.
+
+        A note about evalutaion: the configs are passed to the evaluator as a dictionary of block coords
+        keyed on the fiducial id
+
+        ACTION SPACE
+        The action space is up/down/left/right for each block. Note that currently (as a MultiDiscrete)
+        the agent can move more than one block at a time.
+
+        '''
+        super().__init__()
         self.width, self.height = (dim//self.GRID_WIDTH for dim in screen_size)
         # each block can move in four directions
         NUM_DIRECTIONS = 4
@@ -36,10 +58,24 @@ class DistopiaEnv(gym.Env):
             # list of districts
             [spaces.Tuple(
                 # list of blocks
-                [spaces.Tuple((spaces.Discrete(self.height),spaces.Discrete(self.width))) 
+                [spaces.Tuple((spaces.Discrete(self.width + self.PADDING),spaces.Discrete(self.height))) 
                     for block in range(self.BLOCKS_PER_DISTRICT)]) 
             for district in range(self.NUM_DISTRICTS)])
         self.reward_range = (-float('inf'), float('inf'))
+
+        self.reset()
+
+    def setup_voronoi(self):
+        self.voronoi = VornoiAgent()
+        self.voronoi.load_data()
+
+    def evaluate(self,observation):
+        obs_dict = {}
+        for i,district in enumerate(observation):
+            obs_dict[i] = district
+        state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(obs_dict)
+        
+
     def step(self, action):
         """
         Run one timestep of the environment's dynamics. When end of
@@ -54,13 +90,159 @@ class DistopiaEnv(gym.Env):
             done (bool): whether the episode has ended, in which case further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
+        
+        self.current_step += 1
+        observation, success = self._take_action(action)
+        reward = self.evaluate(observation)
+        done = False
+        info = {}
+        return (observation, reward, done, info)
 
-    def reset(self):
+    def _next_observation(self):
+        return self.districts
+
+    def _update_state(self,district,block,old_loc,new_loc):
+        self.districts[district][block] = new_loc
+        self.occupied[str(new_loc)] = True
+        self.occupied[str(old_loc)] = False
+    
+
+    def _apply_action(self, district, block, action)
+        '''
+        Inputs:
+            district: the district of the block to apply the action to
+            block: the block in that district to apply the action to
+            action: a number from {0,1,2,3,4} representing the action
+        Updates:
+            self.districts if possible to apply the action legally
+        Returns:
+            True if action succeeded, False if it failed
+
+        '''
+        success = False
+        block_location = self.districts[district][block]
+        if action == 0:
+            # do nothing
+            return True
+
+        elif action == 1:
+            # move north
+            new_loc = block_location + (0, 1)
+            if new_loc[1] > self.height or str(new_loc) in self.occupied:
+                return False
+            else:
+                self._update_state(district,block,block_location,new_loc)
+                return True
+
+        elif action == 2:
+            # move south
+            new_loc = block_location + (0, -1)
+            if new_loc[1] < 0 or str(new_loc) in self.occupied:
+                return False
+            else:
+                self._update_state(district,block,block_location,new_loc)
+                return True
+
+        elif action == 3:
+            # move east
+            new_loc = block_location + (1, 0)
+            if new_loc[0] > self.width or str(new_loc) in self.occupied:
+                return False
+            else:
+                self._update_state(district,block,block_location,new_loc)
+                return True
+
+        elif action == 4:
+            # move west
+            new_loc = block_location + (-1, 0)
+            if new_loc[0] < 0 or str(new_loc) in self.occupied:
+                return False
+            else:
+                self._update_state(district,block,block_location,new_loc)
+                return True
+
+        else:
+            raise ValueError("Invalid action requested: {}. Please pass actions between 0 and 5.".format(action))
+
+    
+    def _take_action(self, action):
+        '''
+        Inputs:
+            action: an array of numbers between 0 and the number of moves
+            the array is flattened (num_districts * num_blocks per district)
+        Returns:
+            the current block layout after taking the action
+            a boolean list parallel to the input, indicating which succeeded and which failed
+        
+        Note that some actions may make other illegal. This function will perform the actions in
+        random order in an attempt to reduce bias in which actions get nullified by prior actions.
+        '''
+        # generate a random order in which to execute the actions
+        indices = np.arange(len(action))
+        np.random.shuffle(indices)
+        successes = []
+        # go through the actions, unflattening and applying each one if legal
+        for index in indices:
+            district = index // self.BLOCKS_PER_DISTRICT
+            block = index % self.BLOCKS_PER_DISTRICT
+            successes.append(self._apply_action(district,block,action[index]))
+        
+        return self.districts, successes
+
+    def place_block(self,occupied,active=None):
+        '''
+        Get unoccupied x,y coords to place a block on the active zone
+        of the table, non-active zone, or neither
+        Inputs:
+            occupied: a dict containing occupied coords as keys
+            active: True to force the placement in the active area
+                    False to force the placement in the PADDING area
+                    None to not force either
+        Returns:
+            a numpy array x,y for a block
+        '''
+        xlow = self.PADDING if (active == True) else 0
+        xhigh = self.PADDING if (active == False) else self.PADDING + self.width
+        ylow = 0
+        yhigh = self.height
+        x = np.random.randint(low=xlow, high=xhigh)
+        y = np.random.randint(low=ylow, high=yhigh)
+        while str(np.asarray([x,y])) in occupied:
+            x = np.random.randint(low=xlow, high=xhigh)
+            y = np.random.randint(low=ylow, high=yhigh)
+        return np.asarray([x,y])
+  
+    def reset(self, initial=None, min_active=1, max_active=self.BLOCKS_PER_DISTRICT):
         """
         Resets the state of the environment and returns an initial observation.
+            initial: a complete inital block layout
+            min_active: the min number of blocks that should be in the active area for each district
+            max_active: the max number of blocks that can be in the active area for each district
         Returns: 
             observation (object): the initial observation.
         """
+        if initial != None:
+            self.districts = initial
+        else:
+            # in order to prevent overlaps, hash each block placed on its coords
+            self.occupied = {}
+
+            self.districts = [
+                [
+                    np.zeros(2) for b in range(self.BLOCKS_PER_DISTRICT)
+                ] for d in range(self.NUM_DISTRICTS)
+            ]
+
+            for district in self.districts:
+                for block in district[:min_active]:
+                    block = self.place_block(self.occupied,active=True)
+                    self.occupied[str(block)] = True
+                for block in district[min_active:max_active]:
+                    block = self.place_block(self.occupied,active=None) # None-->don't force active, False-->force not active
+                    self.occupied[str(block)] = True
+
+        return self.districts
+
     def render(self, mode='human'):
         """
         Renders the environment.
@@ -116,3 +298,7 @@ class DistopiaEnv(gym.Env):
 
 
 
+if __name__ == '__main__':
+    de = DistopiaEnv((1920,1080))
+    import pdb
+    pdb.set_trace()
