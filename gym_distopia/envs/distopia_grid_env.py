@@ -27,11 +27,16 @@ class DistopiaEnv(gym.Env):
     BLOCKS_PER_DISTRICT = 3
     GRID_WIDTH = 100 #width of a grid in pixels
 
+    moves = ['ADD0','ADD1','ADD2','ADD3','ADD4','ADD5','ADD6','ADD7','REMOVE','MOVE_N','MOVE_S','MOVE_E','MOVE_W']
 
     def __init__(self, screen_size):
         self.width, self.height = (dim//self.GRID_WIDTH for dim in screen_size)
         # each block can move in four directions
-        self.action_space = spaces.MultiDiscrete([4]*self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT)
+        self.action_space = spaces.Dict({
+            'x': spaces.Discrete(self.width),
+            'y': spaces.Discrete(self.height),
+            'move': spaces.Discrete(13) #(Add0, Add1, Add2,...Remove,MoveN,MoveS,MoveE,MoveW)
+        })
         # the state space is the x,y coords of all blocks i.e. (x0,y0,x1,y1,x2,y2...)
         self.observation_space = spaces.Box(low=0, high=NUM_DISTRICTS-1, shape=(self.height, self.width), dtype=np.uint8) # IMPORTANT is this w x h or h x w??
         spaces.Tuple((spaces.Discrete(10) for x in range(self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT * 2)))
