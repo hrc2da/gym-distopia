@@ -1,6 +1,7 @@
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+import numpy as np
 
 class DistopiaEnv(gym.Env):
     """
@@ -38,7 +39,7 @@ class DistopiaEnv(gym.Env):
             'move': spaces.Discrete(13) #(Add0, Add1, Add2,...Remove,MoveN,MoveS,MoveE,MoveW)
         })
         # the state space is the x,y coords of all blocks i.e. (x0,y0,x1,y1,x2,y2...)
-        self.observation_space = spaces.Box(low=0, high=NUM_DISTRICTS-1, shape=(self.height, self.width), dtype=np.uint8) # IMPORTANT is this w x h or h x w??
+        self.observation_space = spaces.Box(low=0, high=self.NUM_DISTRICTS-1, shape=(self.height, self.width), dtype=np.uint8) # IMPORTANT is this w x h or h x w??
         #spaces.Tuple((spaces.Discrete(10) for x in range(self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT * 2)))
         self.reward_range = (-float('inf'), float('inf'))
     def step(self, action):
@@ -61,7 +62,7 @@ class DistopiaEnv(gym.Env):
         Returns: 
             observation (object): the initial observation.
         """
-    def render(self, mode-'human'):
+    def render(self, mode='human'):
         """
         Renders the environment.
         The set of supported modes varies per environment. (And some
