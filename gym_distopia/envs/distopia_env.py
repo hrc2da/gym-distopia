@@ -1,7 +1,12 @@
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-from distopia.app.agent import VornoiAgent
+from distopia.app.agent import VoronoiAgent
+from copy import deepcopy
+import numpy as np
+
+
+WISCONSIN_POP = 5814000
 
 class DistopiaEnv(gym.Env):
     """
@@ -28,7 +33,8 @@ class DistopiaEnv(gym.Env):
     BLOCKS_PER_DISTRICT = 3
     GRID_WIDTH = 50 # width of a grid in pixels
     PADDING = 100//GRID_WIDTH # px reserved for the "off-screen" blocks
-    def __init__(self, screen_size):
+    NUM_DIRECTIONS = 5 # 0,1,2,3,4 --> Do nothing, N, S, E, W
+    def __init__(self, screen_size, objective):
         '''
         OBSERVATION (STATE) SPACE:
         The state space for this environment is the x,y coordinates for each block
@@ -50,9 +56,7 @@ class DistopiaEnv(gym.Env):
         '''
         super().__init__()
         self.width, self.height = (dim//self.GRID_WIDTH for dim in screen_size)
-        # each block can move in four directions
-        NUM_DIRECTIONS = 4
-        self.action_space = spaces.MultiDiscrete([NUM_DIRECTIONS]*self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT)
+        self.action_space = spaces.MultiDiscrete([self.NUM_DIRECTIONS]*self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT)
         # the state space is the x,y coords of all blocks i.e. (x0,y0,x1,y1,x2,y2...)
         self.observation_space = spaces.Tuple(
             # list of districts
@@ -62,19 +66,56 @@ class DistopiaEnv(gym.Env):
                     for block in range(self.BLOCKS_PER_DISTRICT)]) 
             for district in range(self.NUM_DISTRICTS)])
         self.reward_range = (-float('inf'), float('inf'))
-
+        # TODO Hard-coding this reward range for population rn, but figure out a way to select for different metrics
+        std_dummy = np.zeros(self.NUM_DISTRICTS)
+        std_dummy[0] = WISCONSIN_POP
+        self.reward_range = (-np.std(std_dummy),0.0)
+        self.setup_voronoi(objective)
         self.reset()
 
-    def setup_voronoi(self):
-        self.voronoi = VornoiAgent()
+    def setup_voronoi(self,objective):
+        self.voronoi = VoronoiAgent()
         self.voronoi.load_data()
+        try:
+            self.objective_id = self.voronoi.metrics.index(objective)
+        except ValueError:
+            raise ValueError("Trying to optimize on {} but it doesn't exist!".format(objective))
+        self.reward_fn = lambda districts: np.std(districts)
+            
 
     def evaluate(self,observation):
         obs_dict = {}
         for i,district in enumerate(observation):
             obs_dict[i] = district
-        state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(obs_dict)
+        try:
+            state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(obs_dict)
+            
+        except Exception:
+            print("Couldn't compute Voronoi for {}".format(fids))
+            return False
+        try:
+            objectives = self.extract_objective(district_metrocs)
+            
+            return self.reward_fn(objectives)
+            #print("{}:{}".format(self.n_calls,cost))
+        except ValueError as v:
+            print(v)
+            return False
         
+
+
+    def extract_objective(self,districts):
+        objective_vals = []
+        
+        if len(districts) < 1:
+            raise ValueError("No Districts")
+        for d in districts:
+            data = districts[d][self.objective_id].get_data()
+            if len(data['data']) < 1:
+                raise ValueError("Empty District")
+            else:
+                objective_vals.append(data['scalar_value'])
+        return objective_vals
 
     def step(self, action):
         """
@@ -90,12 +131,17 @@ class DistopiaEnv(gym.Env):
             done (bool): whether the episode has ended, in which case further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
-        
+        done = False
+        info = {"error":None}
         self.current_step += 1
+        self.prior_state = deepcopy(self.districts)
         observation, success = self._take_action(action)
         reward = self.evaluate(observation)
-        done = False
-        info = {}
+        if reward == False:
+            self.reset(initial=self.prior_state)
+            reward = self.reward_range[0]
+            info["error"] = "illegal voronoi"
+        
         return (observation, reward, done, info)
 
     def _next_observation(self):
@@ -107,7 +153,7 @@ class DistopiaEnv(gym.Env):
         self.occupied[str(old_loc)] = False
     
 
-    def _apply_action(self, district, block, action)
+    def _apply_action(self, district, block, action):
         '''
         Inputs:
             district: the district of the block to apply the action to
@@ -212,7 +258,7 @@ class DistopiaEnv(gym.Env):
             y = np.random.randint(low=ylow, high=yhigh)
         return np.asarray([x,y])
   
-    def reset(self, initial=None, min_active=1, max_active=self.BLOCKS_PER_DISTRICT):
+    def reset(self, initial=None, min_active=1, max_active=None):
         """
         Resets the state of the environment and returns an initial observation.
             initial: a complete inital block layout
@@ -224,6 +270,8 @@ class DistopiaEnv(gym.Env):
         if initial != None:
             self.districts = initial
         else:
+            if max_active == None:
+                max_active = self.BLOCKS_PER_DISTRICT
             # in order to prevent overlaps, hash each block placed on its coords
             self.occupied = {}
 
@@ -299,6 +347,6 @@ class DistopiaEnv(gym.Env):
 
 
 if __name__ == '__main__':
-    de = DistopiaEnv((1920,1080))
+    de = DistopiaEnv((1920,1080),"population")
     import pdb
     pdb.set_trace()
