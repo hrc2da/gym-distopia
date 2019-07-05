@@ -39,7 +39,7 @@ class DistopiaEnv(gym.Env):
         })
         # the state space is the x,y coords of all blocks i.e. (x0,y0,x1,y1,x2,y2...)
         self.observation_space = spaces.Box(low=0, high=NUM_DISTRICTS-1, shape=(self.height, self.width), dtype=np.uint8) # IMPORTANT is this w x h or h x w??
-        spaces.Tuple((spaces.Discrete(10) for x in range(self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT * 2)))
+        #spaces.Tuple((spaces.Discrete(10) for x in range(self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT * 2)))
         self.reward_range = (-float('inf'), float('inf'))
     def step(self, action):
         """
