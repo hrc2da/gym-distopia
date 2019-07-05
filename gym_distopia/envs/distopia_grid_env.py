@@ -26,19 +26,15 @@ class DistopiaEnv(gym.Env):
     NUM_DISTRICTS = 4
     BLOCKS_PER_DISTRICT = 3
     GRID_WIDTH = 100 #width of a grid in pixels
+
+
     def __init__(self, screen_size):
         self.width, self.height = (dim//self.GRID_WIDTH for dim in screen_size)
         # each block can move in four directions
-        NUM_DIRECTIONS = 4
-        self.action_space = spaces.MultiDiscrete([NUM_DIRECTIONS]*self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT)
+        self.action_space = spaces.MultiDiscrete([4]*self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT)
         # the state space is the x,y coords of all blocks i.e. (x0,y0,x1,y1,x2,y2...)
-        self.observation_space = spaces.Tuple(
-            # list of districts
-            [spaces.Tuple(
-                # list of blocks
-                [spaces.Tuple((spaces.Discrete(self.height),spaces.Discrete(self.width))) 
-                    for block in range(self.BLOCKS_PER_DISTRICT)]) 
-            for district in range(self.NUM_DISTRICTS)])
+        self.observation_space = spaces.Box(low=0, high=NUM_DISTRICTS-1, shape=(self.height, self.width), dtype=np.uint8) # IMPORTANT is this w x h or h x w??
+        spaces.Tuple((spaces.Discrete(10) for x in range(self.NUM_DISTRICTS * self.BLOCKS_PER_DISTRICT * 2)))
         self.reward_range = (-float('inf'), float('inf'))
     def step(self, action):
         """
@@ -54,14 +50,13 @@ class DistopiaEnv(gym.Env):
             done (bool): whether the episode has ended, in which case further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
-
     def reset(self):
         """
         Resets the state of the environment and returns an initial observation.
         Returns: 
             observation (object): the initial observation.
         """
-    def render(self, mode='human'):
+    def render(self, mode-'human'):
         """
         Renders the environment.
         The set of supported modes varies per environment. (And some
@@ -113,6 +108,4 @@ class DistopiaEnv(gym.Env):
               this won't be true if seed=None, for example.
         """
         return
-
-
 
