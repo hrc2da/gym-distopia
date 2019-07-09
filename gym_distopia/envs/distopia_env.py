@@ -33,7 +33,7 @@ class DistopiaEnv(gym.Env):
     
     def __init__(self, screen_size, reward_evaluator, num_districts = 4, blocks_per_district = 3,
                     grid_width = 50, raw_padding = 100, num_directions = 5, step_size = 1, 
-                    init_state = None, skip_first_reset = False, always_reset_to_initial = False):
+                    init_state = None, skip_first_reset = False, always_reset_to_initial = False, max_steps = 100):
         '''
         OBSERVATION (STATE) SPACE:
         The state space for this environment is the x,y coordinates for each block
@@ -57,6 +57,7 @@ class DistopiaEnv(gym.Env):
 
         '''
         super().__init__()
+        self._max_steps = max_steps
         self.STEP_SIZE = step_size
         self.NUM_DISTRICTS = num_districts
         self.BLOCKS_PER_DISTRICT = blocks_per_district
@@ -117,9 +118,13 @@ class DistopiaEnv(gym.Env):
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
         self.last_action = action
-        done = False
+        
         info = {"error":""}
         self.current_step += 1
+        if self.current_step < self._max_steps:
+            done = False
+        else:
+            done = True
         self.prior_state = deepcopy(self.districts)
         observation, success = self._take_action(action)
         reward = self.evaluate(observation)
@@ -254,6 +259,7 @@ class DistopiaEnv(gym.Env):
         Returns: 
             observation (object): the initial observation.
         """
+        self.current_step = 0
         if self.skip_reset == True:
             self.skip_reset = False
             return self.districts
@@ -338,7 +344,7 @@ class DistopiaEnv(gym.Env):
                 plt.legend(loc=0)
                 plt.title(self.last_action)
             plt.show(block=False)
-            plt.pause(0.05)
+            #plt.pause(0.05)
             plt.clf()
             #plt.close()
         else:

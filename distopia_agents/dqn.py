@@ -1,6 +1,7 @@
 import numpy as np
 import gym_distopia
 import gym
+from gym import wrappers
 
 from keras.models import Sequential, model_from_yaml
 from keras.layers import Dense, Activation, Flatten
@@ -57,6 +58,7 @@ class DistopiaDQN:
 
     def init_env(self):
         self.env = gym.make(self.ENV_NAME)
+        self.env = gym.wrappers.Monitor(self.env, "recording", force=True)
         np.random.seed(234)
         self.env.seed(234)
         self.nb_actions = np.sum(self.env.action_space.nvec)
@@ -107,16 +109,18 @@ class DistopiaDQN:
                     target_model_update=1e-2, policy=policy)
         self.dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 
-    def train(self):
+    def train(self, max_steps = 100, episodes = 100):
         # Okay, now it's time to learn something! We visualize the training here for show, but this
         # slows down training quite a lot. You can always safely abort the training prematurely using
         # Ctrl + C.
-        for i in range(100):
-            self.dqn.fit(self.env, nb_steps=100, visualize=True, verbose=1)
-            self.env.reset()
+        self.env._max_steps = max_steps
+        for i in range(episodes):
+            self.env.current_step = 0
+            self.dqn.fit(self.env, nb_steps=max_steps, visualize=True, verbose=1)
+            #self.env.reset()
         
-        # After training is done, we save the final weights.
-        self.dqn.save_weights('{}/{}.h5'.format(self.out_path, self.ENV_NAME), overwrite=True)
+            # After episode is done, we save the final weights.
+            self.dqn.save_weights('{}/{}.h5'.format(self.out_path, self.ENV_NAME), overwrite=True)
 
     def test(self):
         # Finally, evaluate our algorithm for 5 episodes.
