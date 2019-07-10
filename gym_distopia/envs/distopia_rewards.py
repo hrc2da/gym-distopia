@@ -75,12 +75,13 @@ class PopulationStdEvaluator(RewardEvaluator):
         std_dummy = np.zeros(NUM_DISTRICTS)
         std_dummy[0] = WISCONSIN_POP
         self.max_punishment = np.std(std_dummy)
-        self.reward_range = (-self.max_punishment/self.max_punishment,0.0) #normalized
+        #self.reward_range = (-self.max_punishment/self.max_punishment,0.0) #normalized
+        self.reward_range = (-self.max_punishment/self.max_punishment+1,0.0+1) #normalized plus 1
         return self.reward_range
     
     
 
     def calculate_reward(self,state_metrics,district_metrics):
         objectives = self.extract_objectives(district_metrics)
-        return minimize_std(objectives[self.objective_ids[0]])/self.max_punishment
+        return minimize_std(objectives[self.objective_ids[0]])/self.max_punishment + 1
         
