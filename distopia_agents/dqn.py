@@ -11,6 +11,9 @@ from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy
 from rl.memory import SequentialMemory
 
+import os
+import time
+
 class PatchedBoltzmannQPolicy(BoltzmannQPolicy):
     '''
         Monkey-patching to allow for multi-discrete action space (have to convert from scalar to array of scalars)
@@ -44,20 +47,24 @@ class PatchedBoltzmannQPolicy(BoltzmannQPolicy):
 
 class DistopiaDQN:
    
-    def __init__(self,env_name='distopia-initial4-v0',in_path=None,out_path=None,reconstruct=False):
+    def __init__(self,env_name='distopia-initial4-v0',in_path=None,out_path=None,terminate_on_fail=False,reconstruct=False):
         self.ENV_NAME = env_name
         self.filename = self.ENV_NAME
         self.init_paths(in_path,out_path)
-        self.init_env()
+        self.init_env(terminate_on_fail)
         self.init_model(reconstruct)
         self.compile_agent()
 
     def init_paths(self, in_path, out_path):
         self.in_path = in_path #if self.in_path != None else './'
         self.out_path = out_path if out_path != None else './'
+        self.log_path = "./logs/{}".format(time.time())
+        os.mkdir(self.log_path)
 
-    def init_env(self):
+    def init_env(self,terminate_on_fail):
         self.env = gym.make(self.ENV_NAME)
+        self.env.terminate_on_fail = terminate_on_fail
+        self.env.record_path = "{}/ep_".format(self.log_path)
         self.env = gym.wrappers.Monitor(self.env, "recording", force=True)
         np.random.seed(234)
         self.env.seed(234)
@@ -105,8 +112,8 @@ class DistopiaDQN:
         # even the metrics!
         memory = SequentialMemory(limit=50000, window_length=1)
         policy = PatchedBoltzmannQPolicy(num_actions = self.num_actions, num_blocks = self.num_blocks)
-        self.dqn = DQNAgent(model=self.model, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=30, enable_double_dqn=True,
-                    target_model_update=1e-2, policy=policy)
+        self.dqn = DQNAgent(model=self.model, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=1000, enable_double_dqn=True,
+                    target_model_update=1e-2, policy=policy, gamma = 0.9)
         self.dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 
     def train(self, max_steps = 100, episodes = 100):
@@ -114,13 +121,14 @@ class DistopiaDQN:
         # slows down training quite a lot. You can always safely abort the training prematurely using
         # Ctrl + C.
         self.env._max_steps = max_steps
-        for i in range(episodes):
-            self.env.current_step = 0
-            self.dqn.fit(self.env, nb_steps=max_steps, visualize=True, verbose=1)
-            #self.env.reset()
+        #for i in range(episodes):
+        self.env.current_step = 0
+        n_steps = max_steps*episodes
+        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=False, verbose=1)
+        #self.env.reset()
         
-            # After episode is done, we save the final weights.
-            self.dqn.save_weights('{}/{}.h5'.format(self.out_path, self.ENV_NAME), overwrite=True)
+        # After episode is done, we save the final weights.
+        self.dqn.save_weights('{}/{}.h5'.format(self.out_path, self.ENV_NAME), overwrite=True)
 
     def test(self):
         # Finally, evaluate our algorithm for 5 episodes.
@@ -129,6 +137,6 @@ class DistopiaDQN:
 
 
 if __name__ == '__main__':
-    d = DistopiaDQN()
-    d.train()
+    d = DistopiaDQN(terminate_on_fail=True)
+    d.train(episodes=100)
     #d.test()

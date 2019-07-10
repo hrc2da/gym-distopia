@@ -4,8 +4,10 @@ from gym.utils import seeding
 from gym_distopia.envs.distopia_rewards import PopulationStdEvaluator
 from copy import deepcopy
 import numpy as np
-
+import json
 from matplotlib import pyplot as plt
+import pickle
+import time
 
 
 
@@ -33,7 +35,8 @@ class DistopiaEnv(gym.Env):
     
     def __init__(self, screen_size, reward_evaluator, num_districts = 4, blocks_per_district = 3,
                     grid_width = 50, raw_padding = 100, num_directions = 5, step_size = 1, 
-                    init_state = None, skip_first_reset = False, always_reset_to_initial = False, max_steps = 100):
+                    init_state = None, skip_first_reset = False, always_reset_to_initial = False, max_steps = 100, 
+                    record_path = None, terminate_on_fail = False):
         '''
         OBSERVATION (STATE) SPACE:
         The state space for this environment is the x,y coordinates for each block
@@ -64,9 +67,10 @@ class DistopiaEnv(gym.Env):
         self.GRID_WIDTH = grid_width # width of a grid in pixels
         self.PADDING = raw_padding//self.GRID_WIDTH # px reserved for the "off-screen" blocks
         self.NUM_DIRECTIONS = num_directions # 0,1,2,3,4 --> Do nothing, N, S, E, W
-        
+        self.stats = []
+        self.record_path = record_path
         self.current_step = 0
-
+        self.terminate_on_fail = terminate_on_fail
         if reward_evaluator is None:
             raise ValueError("Must pass a reward evaluator instance! See distopia_rewards.py.")
         self.evaluator = reward_evaluator
@@ -92,7 +96,15 @@ class DistopiaEnv(gym.Env):
         self.skip_reset = False
         self.always_reset_to_initial = always_reset_to_initial
         self.reset(initial=init_state, skip_next_reset=skip_first_reset) #passing skip flag to prevent auto-reset at the start of most agent episodes
-        
+
+
+    def dump_stats(self):
+        with open("{}_{}.pkl".format(self.record_path,time.time()),'wb') as outfile:
+            pickle.dump(self.stats,outfile)
+
+    def record_stat(self,state,reward,success):
+        self.stats.append({"state":str(state),"reward":reward, "success":success})
+
     def get_staged_blocks_dict(self,observation):
         obs_dict = {}
         for i,district in enumerate(observation):
@@ -131,8 +143,11 @@ class DistopiaEnv(gym.Env):
         if reward == False:
             #self.reset(initial=self.prior_state) # IMPORTANT: I think reverting the state will cause me to get stuck (since we're only taking 1-step; alternatively we could force starting from a legal state)
             reward = self.reward_range[0]
+            if self.terminate_on_fail == True:
+                done = True # try this out--ending the episode if illegal action occurs
             info["error"] = "illegal voronoi"
-        
+        if self.record_path is not None:
+            self.record_stat(observation,reward,success)
         return (observation, reward, done, info)
 
     def _next_observation(self):
@@ -259,6 +274,11 @@ class DistopiaEnv(gym.Env):
         Returns: 
             observation (object): the initial observation.
         """
+
+        if len(self.stats) > 1 and self.record_path is not None:
+            self.dump_stats()
+            self.stats = []
+
         self.current_step = 0
         if self.skip_reset == True:
             self.skip_reset = False
