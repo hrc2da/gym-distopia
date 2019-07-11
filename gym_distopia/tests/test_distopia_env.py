@@ -17,12 +17,18 @@ full_valid_state = [
 ]
 
 valid_four_state = [
-    [[12,8]],
-    [[20,8]],
-    [[20,15]],
+     [[12,8]],
+    [[16,8]],
+    [[15,15]],
     [[12,15]]
 ]
 
+invalid_four_state = [
+    [[11,11]],
+    [[17,13]],
+    [[18,18]],
+    [[9,19]]
+]
 
 one_block_per_state = [
     [[400,200],[11,200],[40,201]],
@@ -179,8 +185,16 @@ class TestDistopiaEnv:
         res = self.de.evaluate(self.de.districts)
         assert res == False
 
+
     def test_four_evaluate(self):
         de = DistopiaEnv((1920,1080),self.ev,blocks_per_district=1,num_districts=4)
         de.reset(initial=valid_four_state)
         res = de.evaluate(de.districts)
+        import pdb
+        pdb.set_trace()
         assert res != False
+        de.reset(initial=invalid_four_state)
+        import pdb
+        pdb.set_trace()
+        res = de.evaluate(de.districts)
+        assert res == False

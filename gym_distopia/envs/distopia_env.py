@@ -364,7 +364,7 @@ class DistopiaEnv(gym.Env):
                 plt.legend(loc=0)
                 plt.title(self.last_action)
             plt.show(block=False)
-            #plt.pause(0.05)
+            plt.pause(0.05)
             plt.clf()
             #plt.close()
         else:

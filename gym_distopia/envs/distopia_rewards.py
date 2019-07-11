@@ -24,8 +24,8 @@ class RewardEvaluator:
         try:
             state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(observation)
             
-        except Exception:
-            print("Couldn't compute Voronoi for {}".format(observation))
+        except Exception as e:
+            print("Couldn't compute Voronoi for {}:{}".format(observation,e))
             return False
         
         try:

@@ -8,23 +8,83 @@ from keras.layers import Dense, Activation, Flatten
 from keras.optimizers import Adam
 
 from rl.agents.dqn import DQNAgent
-from rl.policy import BoltzmannQPolicy
+from rl.policy import BoltzmannQPolicy, GreedyQPolicy
 from rl.memory import SequentialMemory
+from rl.callbacks import FileLogger
 
 import os
 import time
 
-class PatchedBoltzmannQPolicy(BoltzmannQPolicy):
+from rl.core import Processor
+
+# class PatchedGreedyQPolicy(GreedyQPolicy):
+#     '''
+#         Monkey-patching to allow for multi-discrete action space (have to convert from scalar to array of scalars)
+#     '''
+#     def __init__(self, num_actions=0, num_blocks=0):
+#         super(PatchedGreedyQPolicy, self).__init__()
+#         if num_actions == 0 or num_blocks == 0:
+#             raise ValueError("Need to pass info about actions and blocks")
+#         self.num_actions = num_actions
+#         self.num_blocks = num_blocks
+#     def action2multidiscrete(self, action):
+#         # takes a scalar, converts it to a multidiscrete
+#         # where there are num_actions for each of num_blocks
+#         # that is, the actions are arranged [b0N, b0S, b0E, b0W, b1N, b1S, b1E, b1W, etc.]
+#         mdaction = []
+#         for i in range(self.num_blocks):
+#             mdaction.append(0)
+#         # to figure out which block it is, divide by the number of actions
+#         block_idx = action // self.num_actions
+#         block_action = action % self.num_actions
+#         mdaction[block_idx] = block_action
+#         return mdaction
+        
+#     def select_action(self, q_values):
+#         action = super(PatchedGreedyQPolicy, self).select_action(q_values)
+#         # this gives me a scalar
+#         return self.action2multidiscrete(action)  
+
+
+# class PatchedBoltzmannQPolicy(BoltzmannQPolicy):
+#     '''
+#         Monkey-patching to allow for multi-discrete action space (have to convert from scalar to array of scalars)
+#     '''
+#     def __init__(self, tau=1., clip=(-500., 500.), num_actions=0, num_blocks=0):
+#         super(PatchedBoltzmannQPolicy, self).__init__(tau,clip)
+#         if num_actions == 0 or num_blocks == 0:
+#             raise ValueError("Need to pass info about actions and blocks")
+#         self.num_actions = num_actions
+#         self.num_blocks = num_blocks
+#     def action2multidiscrete(self, action):
+#         # takes a scalar, converts it to a multidiscrete
+#         # where there are num_actions for each of num_blocks
+#         # that is, the actions are arranged [b0N, b0S, b0E, b0W, b1N, b1S, b1E, b1W, etc.]
+#         mdaction = []
+#         for i in range(self.num_blocks):
+#             mdaction.append(0)
+#         # to figure out which block it is, divide by the number of actions
+#         block_idx = action // self.num_actions
+#         block_action = action % self.num_actions
+#         mdaction[block_idx] = block_action
+#         return mdaction
+        
+#     def select_action(self, q_values):
+#         action = super(PatchedBoltzmannQPolicy, self).select_action(q_values)
+#         # this gives me a scalar
+#         return self.action2multidiscrete(action)
+
+
+class DistopiaProcessor(Processor):
     '''
-        Monkey-patching to allow for multi-discrete action space (have to convert from scalar to array of scalars)
+        Converts actions from a scalar to a multidiscrete for use in the Distopia env
     '''
-    def __init__(self, tau=1., clip=(-500., 500.), num_actions=0, num_blocks=0):
-        super(PatchedBoltzmannQPolicy, self).__init__(tau,clip)
-        if num_actions == 0 or num_blocks == 0:
-            raise ValueError("Need to pass info about actions and blocks")
-        self.num_actions = num_actions
+    def __init__(self,num_blocks,num_actions):
         self.num_blocks = num_blocks
-    def action2multidiscrete(self, action):
+        self.num_actions = num_actions
+        super(DistopiaProcessor,self).__init__()
+
+    def process_action(self,action):
         # takes a scalar, converts it to a multidiscrete
         # where there are num_actions for each of num_blocks
         # that is, the actions are arranged [b0N, b0S, b0E, b0W, b1N, b1S, b1E, b1W, etc.]
@@ -36,11 +96,10 @@ class PatchedBoltzmannQPolicy(BoltzmannQPolicy):
         block_action = action % self.num_actions
         mdaction[block_idx] = block_action
         return mdaction
-        
-    def select_action(self, q_values):
-        action = super(PatchedBoltzmannQPolicy, self).select_action(q_values)
-        # this gives me a scalar
-        return self.action2multidiscrete(action)
+
+    '''
+        do I need to process the observations? please check...
+    '''
 
 
 # from the keras_rl docs
@@ -110,10 +169,14 @@ class DistopiaDQN:
     def compile_agent(self):
         # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
         # even the metrics!
+        processor = DistopiaProcessor(self.num_blocks,self.num_actions)
         memory = SequentialMemory(limit=50000, window_length=1)
-        policy = PatchedBoltzmannQPolicy(num_actions = self.num_actions, num_blocks = self.num_blocks)
-        self.dqn = DQNAgent(model=self.model, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=1000, enable_double_dqn=True,
-                    target_model_update=1e-2, policy=policy, gamma = 0.9)
+        #policy = PatchedBoltzmannQPolicy(num_actions = self.num_actions, num_blocks = self.num_blocks)
+        #test_policy = PatchedGreedyQPolicy(num_actions = self.num_actions, num_blocks = self.num_blocks)
+        policy = BoltzmannQPolicy()
+        test_policy = GreedyQPolicy()
+        self.dqn = DQNAgent(model=self.model, processor=processor, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=1000, enable_double_dqn=True,
+                    target_model_update=1e-2, policy=policy, test_policy=test_policy, gamma = 0.9)
         self.dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 
     def train(self, max_steps = 100, episodes = 100):
@@ -124,7 +187,8 @@ class DistopiaDQN:
         #for i in range(episodes):
         self.env.current_step = 0
         n_steps = max_steps*episodes
-        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=False, verbose=1)
+        logger = FileLogger(filepath='{}/{}.json'.format(self.out_path, self.ENV_NAME))
+        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=False, verbose=1, callbacks=[logger])
         #self.env.reset()
         
         # After episode is done, we save the final weights.
@@ -132,11 +196,12 @@ class DistopiaDQN:
 
     def test(self):
         # Finally, evaluate our algorithm for 5 episodes.
-        self.dqn.test(self.env, nb_episodes=5, visualize=True)
+        self.dqn.test(self.env, nb_episodes=5, nb_max_start_steps=0, visualize=True)
 
 
 
 if __name__ == '__main__':
-    d = DistopiaDQN(terminate_on_fail=True)
+    d = DistopiaDQN(reconstruct=True,terminate_on_fail=True)
+    #lsd.dqn.load_weights('{}/{}.h5'.format(d.out_path,d.ENV_NAME))
     d.train(episodes=100)
     #d.test()
