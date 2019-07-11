@@ -151,12 +151,12 @@ class DistopiaDQN:
     def construct_model(self):
         self.model = Sequential()
         self.model.add(Flatten(input_shape=(1,) + self.env.observation_space.shape))
-        self.model.add(Dense(16))
+        self.model.add(Dense(64))
         self.model.add(Activation('relu'))
-        self.model.add(Dense(16))
+        self.model.add(Dense(64))
         self.model.add(Activation('relu'))
-        self.model.add(Dense(16))
-        self.model.add(Activation('relu'))
+        # self.model.add(Dense(16))
+        # self.model.add(Activation('relu'))
         self.model.add(Dense(self.nb_actions))
         self.model.add(Activation('linear'))
 
@@ -203,5 +203,5 @@ class DistopiaDQN:
 if __name__ == '__main__':
     d = DistopiaDQN(reconstruct=True,terminate_on_fail=True)
     #lsd.dqn.load_weights('{}/{}.h5'.format(d.out_path,d.ENV_NAME))
-    d.train(episodes=100)
+    d.train(episodes=1000)
     #d.test()
