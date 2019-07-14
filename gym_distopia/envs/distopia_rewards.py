@@ -12,6 +12,7 @@ class RewardEvaluator:
     def setup_voronoi(self):
         self.voronoi = VoronoiAgent()
         self.voronoi.load_data()
+        self.num_precincts = len(self.voronoi.precincts)
     def setup_objectives(self,objectives):
         self.objective_ids = []
         try:
@@ -19,6 +20,9 @@ class RewardEvaluator:
                 self.objective_ids.append(self.voronoi.metrics.index(objective))
         except ValueError:
             raise ValueError("Trying to optimize on {} but it doesn't exist!".format(objective))
+
+    def map_districts(self,fiducials):
+        return self.voronoi.get_voronoi_districts(fiducials)
 
     def evaluate(self,observation):
         try:
