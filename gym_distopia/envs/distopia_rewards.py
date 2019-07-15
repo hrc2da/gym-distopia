@@ -24,12 +24,13 @@ class RewardEvaluator:
     def map_districts(self,fiducials):
         return self.voronoi.get_voronoi_districts(fiducials)
 
-    def evaluate(self,observation):
+    def evaluate(self,districts):
+        # districts is a list of districts objects, each with assignments
         try:
-            state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(observation)
+            state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(districts)
             
         except Exception as e:
-            print("Couldn't compute Voronoi for {}:{}".format(observation,e))
+            print("Couldn't compute Voronoi for {}:{}".format(districts,e))
             return False
         
         try:

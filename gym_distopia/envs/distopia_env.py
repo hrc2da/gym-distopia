@@ -80,17 +80,17 @@ class DistopiaEnv(gym.Env):
         self.width, self.height = (dim//self.GRID_WIDTH for dim in screen_size)
         
         
-        self.action_space = spaces.MultiDiscrete([self.NUM_DIRECTIONS]*self.BLOCKS)
+        self.action_space = spaces.MultiDiscrete([self.NUM_DIRECTIONS for b in range(self.NUM_BLOCKS)])
         
         
         
         # the state space is the x,y coords of all blocks i.e. (x0,y0,x1,y1,x2,y2...) + the district assignments of all 72 precincts (p0=0,p1=1,p2=2,...)
         obs_dims = []
-        for b in self.NUM_BLOCKS:
-            obs_dims.append(self.width + self.PADDING)
-            obs_dims.append(self.height)
+        for b in range(self.NUM_BLOCKS):
+            obs_dims.append(self.width + self.PADDING) # x for each block
+            obs_dims.append(self.height) # y for each block
         for p in range(self.NUM_PRECINCTS):
-            obs_dims.append(self.NUM_DISTRICTS)
+            obs_dims.append(self.NUM_DISTRICTS) # district assignment for each precinct
         self.observation_space = spaces.MultiDiscrete(obs_dims)
         #self.observation_space.shape = (self.NUM_DISTRICTS,self.BLOCKS_PER_DISTRICT,2) 
         self.reward_range = self.evaluator.calculate_reward_range({'NUM_DISTRICTS':self.NUM_DISTRICTS})
@@ -105,26 +105,27 @@ class DistopiaEnv(gym.Env):
         with open("{}_{}.pkl".format(self.record_path,time.time()),'wb') as outfile:
             pickle.dump(self.stats,outfile)
 
-    def record_stat(self,state,reward,success):
-        self.stats.append({"state":str(state),"reward":reward, "success":success})
+    def record_stat(self,state,reward,action,success):
+        self.stats.append({"state":json.dumps(state),"reward":reward, "action": action, "success":success})
 
-    def get_staged_blocks_dict(self,observation):
+    def get_staged_blocks_dict(self,block_locs):
+        # refactored
         obs_dict = {}
         for d in range(0,self.NUM_DISTRICTS):
             obs_dict[d] = []
             for b in range(0,self.BLOCKS_PER_DISTRICT):
-                index = d*self.BLOCKS_PER_DISTRICT + 2*b
-                coords = np.array((observation[index],observation[index]+1))
-                if coords[0] > self.PADDING:
-                    obs_dict.append(coords)
+                index = 2*(d*self.BLOCKS_PER_DISTRICT + b)
+                coords = [block_locs[index]*self.GRID_WIDTH,block_locs[index+1]*self.GRID_WIDTH]
+                if block_locs[index] > self.PADDING: # if the x is far enough to the right
+                    obs_dict[d].append(coords)
         return obs_dict
         # for i,district in enumerate(observation):
         #     obs_dict[i] = [block*self.GRID_WIDTH for block in district if block[0] > self.PADDING]
         # return obs_dict
 
-    def evaluate(self,observation):
-        obs_dict = self.get_staged_blocks_dict(observation)
-        return self.evaluator.evaluate(obs_dict)
+    # def evaluate(self,observation):
+    #     obs_dict = self.get_staged_blocks_dict(observation)
+    #     return self.evaluator.evaluate(obs_dict)
 
     def step(self, action):
         """
@@ -148,44 +149,71 @@ class DistopiaEnv(gym.Env):
             done = False
         else:
             done = True
-        self.prior_state = deepcopy(self.districts)
-        observation, success = self._take_action(action)
-        reward = self.evaluate(observation)
+        block_locs, precincts, occupied, district_list, reward, success = self._take_action(action, evaluate = True)
+        observation = self.block_locs + self.precincts
+        #if the evaluation failed
         if reward == False:
-            #self.reset(initial=self.prior_state) # IMPORTANT: I think reverting the state will cause me to get stuck (since we're only taking 1-step; alternatively we could force starting from a legal state)
+            # don't carry out the action
             reward = self.reward_range[0]
             if self.terminate_on_fail == True:
                 done = True # try this out--ending the episode if illegal action occurs
             info["error"] = "illegal voronoi"
+        else:
+            self.update_state(block_locs,precincts,occupied,district_list)
+            self.last_reward = reward
         if self.record_path is not None:
-            self.record_stat(observation,reward,success)
+            self.record_stat(observation,reward,action,success)
         return (observation, reward, done, info)
 
     def _next_observation(self):
-        return self.districts + self.precincts
+        # refactored
+        return self.block_locs + self.precincts
 
-    def update_state(self):
-        ...
-    def get_updated_block_locs(self,block_idx,old_loc,new_loc):
-     
-        block_locs = self.block_locs[:]
-        occupied = deepcopy(self.occupied)
+    def update_state(self,block_locs,precincts,occupied,district_list):
+        '''
+        updates the state
+        block_locs: an array of block locations
+        precincts: an array of precinct district assignments
+        occupied: a dict keyed on grid coords holding the block_ids
+        district_list: a list of districts with their precincts
+        '''
+        self.block_locs = block_locs
+        self.precincts = precincts
+        self.occupied = occupied
+        self.district_list = district_list
+
+    def get_updated_block_locs(self,block_idx,old_loc,new_loc,block_locs,occupied):
+        # refactored
+        #block_locs = self.block_locs[:]
+        #occupied = deepcopy(self.occupied)
         block_locs[block_idx] = new_loc[0]
         block_locs[block_idx+1] = new_loc[1]
-        occupied[str(new_loc)] = (district,block)
+        occupied[str(new_loc)] = block_idx
         if old_loc is not None: # note that is ! the same as == here; == tries to do a value compare, is does identity compare, so == fails b/c np array has no truth value
             occupied.pop(str(old_loc))
         return block_locs, occupied    
     
+    def parse_precincts(self, district_list):
+        precincts = [-1 for p in range(self.NUM_PRECINCTS)]
+        for district in district_list:
+            for p in district.precincts:
+                precincts[p.identity] = district.identity
+        return precincts
+
     def get_updated_precincts(self, block_locs):
-        try:
-            precincts = self.evaluator.map_districts(block_locs)
-        if len(precincts) < 1:
+        # refactored
+        district_list = self.evaluator.map_districts(self.get_staged_blocks_dict(block_locs)) # list of precinct assignments for each district
+        if len(district_list) < 1:
             return False
         else:
-            return precincts
+            # if parsed is True:
+            #     return self.parse_precincts(district_list)
+            # else:
+            #     return district_list
+            return self.parse_precincts(district_list), district_list
 
-    def _apply_action(self, block_id, action):
+    def _apply_action(self, block_id, action, block_locs, precincts, occupied):
+        # refactored
         '''
         Inputs:
             district: the district of the block to apply the action to
@@ -201,60 +229,66 @@ class DistopiaEnv(gym.Env):
         #block_location = self.districts[district][block]
         block_x_idx = block_id * 2
         block_y_idx = block_x + 1
-        block_x = self.districts[block_x_idx]
-        block_y = self.districts[block_y_idx]
+        block_x = block_locs[block_x_idx]
+        block_y = block_locs[block_y_idx]
         if action == 0:
             # do nothing
-            return True
+            return block_locs, precincts, occupied
 
         elif action == 1:
             # move north
             target_x = block_x
             target_y = block_y + self.STEP_SIZE
-            if target_y > self.height or str([target_x,target_y]) in self.occupied:
+            if target_y > self.height or str([target_x,target_y]) in occupied:
                 return False
 
         elif action == 2:
             # move south
             target_x = block_x
             target_y = block_y - self.STEP_SIZE
-            if target_y < 0 or str([target_x,target_y]) in self.occupied:
+            if target_y < 0 or str([target_x,target_y]) in occupied:
                 return False
             
         elif action == 3:
             # move east
             target_x = block_x + self.STEP_SIZE
             target_y = block_y 
-            if target_x > self.width or str([target_x,target_y]) in self.occupied:
+            if target_x > self.width or str([target_x,target_y]) in occupied:
                 return False
 
         elif action == 4:
             # move west
             target_x = block_x - self.STEP_SIZE
             target_y = block_y
-            if target_x < 0 or str([target_x,target_y]) in self.occupied:
+            if target_x < 0 or str([target_x,target_y]) in occupied:
                 return False
 
         else:
             raise ValueError("Invalid action requested: {}. Please pass actions between 0 and {}.".format(action,self.NUM_DIRECTIONS-1))
         block_loc = [block_x,block_y]
         new_loc = [target_x,target_y]
-        block_locs, occupied = self.get_updated_block_locs(block_x_idx, block_loc, new_loc)
-        precincts = self.get_updated_precincts(block_locs)
-        if precincts == False:
+        block_locs, occupied = self.get_updated_block_locs(block_x_idx, block_loc, new_loc, block_locs, occupied)
+        assignments = self.get_updated_precincts(block_locs)
+        if assignments == False:
             return False
-
-        return block_locs, precincts, occupied
+        precincts, district_list = assignments
+        return block_locs, precincts, occupied, district_list
         
     
-    def _take_action(self, action):
+    def _take_action(self, action, evaluate = False):
+        # refactored
         '''
         Inputs:
             action: an array of numbers between 0 and the number of moves
-            the array is flattened (num_districts * num_blocks per district)
+            for each block, e.g. [0, 0, 0, 2] moves the 4th block south 1 step
+
+            evaluate: if true, will return an evaluation for the config. otherwise,
+            will return None for the evaluation
         Returns:
-            the current block layout after taking the action
-            a boolean list parallel to the input, indicating which succeeded and which failed
+            bloc_locs: the current block layout after taking the action
+            precincts: a (parsed) list of precinct assignments
+            evaluation: evaluation of district state or None
+            successes: a boolean list parallel to the input, indicating which succeeded and which failed
         
         Note that some actions may make other illegal. This function will perform the actions in
         random order in an attempt to reduce bias in which actions get nullified by prior actions.
@@ -262,19 +296,49 @@ class DistopiaEnv(gym.Env):
         # generate a random order in which to execute the actions
         indices = np.arange(len(action))
         np.random.shuffle(indices)
-        successes = [0]*4
+        successes = [0]*len(action)
+        changes = 0
+        block_locs = self.block_locs[:]
+        precincts = self.precincts[:]
+        occupied = deepcopy(self.occupied)
+        evaluation = None
+        district_list =  self.district_list[:]
         # go through the actions, unflattening and applying each one if legal
         for index in indices:
             # district = index // self.BLOCKS_PER_DISTRICT
             # block = index % self.BLOCKS_PER_DISTRICT
             block_id = index * 2
-            successes[index] = self._apply_action(block_id,action[index])*action[index] # return 1 if successful move, 0 if no move or failure
-        return self.districts, successes
+            res = self._apply_action(block_id,action[index],block_locs,precincts,occupied) 
+            if res is not False:
+                successes[index] = 1
+                if action[index] > 0:
+                    changes += 1
+                    block_locs, precincts, occupied, district_list = res
+            num_failures = sum(successes)
+
+        if evaluate is True:
+            if num_failures > 0:
+                # don't update the state
+                return block_locs, precincts, occupied, district_list, False ,successes
+                
+
+            else:
+                evaluation = self.evaluator.evaluate(district_list)
+                if evaluation is False:
+                    block_locs = self.block_locs
+                    precincts = self.precincts
+                    occupied = self.occupied
+                    district_list = self.district_list
+        else:
+            evaluation = None
+            
+        return block_locs, precincts, occupied, district_list, evaluation, successes
 
     
         
 
     def place_block(self,occupied,active=None):
+        # refactored!
         '''
         Get unoccupied x,y coords to place a block on the active zone
         of the table, non-active zone, or neither
@@ -284,7 +348,7 @@ class DistopiaEnv(gym.Env):
                     False to force the placement in the PADDING area
                     None to not force either
         Returns:
-            a numpy array x,y for a block
+            x,y for a block
         '''
         xlow = self.PADDING if (active == True) else 0
         xhigh = self.PADDING if (active == False) else self.PADDING + self.width
@@ -295,16 +359,17 @@ class DistopiaEnv(gym.Env):
         while str(np.asarray([x,y])) in occupied:
             x = np.random.randint(low=xlow, high=xhigh)
             y = np.random.randint(low=ylow, high=yhigh)
-        return np.asarray([x,y])
+        return x, y
   
     def reset(self, initial=None, min_active=1, max_active=None, skip_next_reset = False):
+        # refactored!
         """
         Resets the state of the environment and returns an initial observation.
             initial: a complete inital block layout
             min_active: the min number of blocks that should be in the active area for each district
             max_active: the max number of blocks that can be in the active area for each district
         Returns: 
-            observation (object): the initial observation.
+            observation (object): the initial observation, consisting of block_locs + precinct_assignments.
         """
 
         if len(self.stats) > 1 and self.record_path is not None:
@@ -314,49 +379,60 @@ class DistopiaEnv(gym.Env):
         self.current_step = 0
         if self.skip_reset == True:
             self.skip_reset = False
-            return self.districts
+            return self.block_locs + self.precincts
         if skip_next_reset == True:
             self.skip_reset = True
         if initial is not None:
-            self.districts = []
-            for d in initial:
-                new_district = [np.asarray(b) for b in d]
-                self.districts.append(new_district)
+            self.block_locs = []
             self.occupied = {}
-            for district in self.districts:
-                for block in district:
-                    self.occupied[str(block)] = [district,block]
-            self.initial_state = deepcopy(self.districts)
+            for d in initial:
+                for b in d:
+                    self.block_locs.append(b[0])
+                    self.block_locs.append(b[1])
+                    self.occupied[str(b)] = len(self.block_locs) - 1 # x-index 
+            assignments = self.get_updated_precincts(self.block_locs)
+            assert assignments is not False
+            self.precincts, self.district_list = assignments
+
+            self.initial_blocks = deepcopy(self.block_locs)
+            self.initial_precincts = deepcopy(self.precincts)
             self.initial_occupancy = deepcopy(self.occupied)
+            self.initial_district_list = deepcopy(self.district_list)
 
         elif self.always_reset_to_initial == True:
             print("resetting from start!")
-            self.districts = deepcopy(self.initial_state)
+            self.block_locs = deepcopy(self.initial_blocks)
+            self.precincts = deepcopy(self.initial_precincts)
             self.occupied = deepcopy(self.initial_occupancy)
+            self.district_list = deepcopy(self.initial_district_list)
 
         else:
             if max_active is None:
                 max_active = self.BLOCKS_PER_DISTRICT
             # in order to prevent overlaps, hash each block placed on its coords
-            self.occupied = {}
+            assignments = False
+            # this is VERY inefficient and it is NOT recommended for larger number of blocks
+            # or AT ALL unless ABSOLUTELY necessary.
+            while assignments == False:
+                self.occupied = {}
 
-            self.districts = [
-                [
-                    np.zeros(2) for b in range(self.BLOCKS_PER_DISTRICT)
-                ] for d in range(self.NUM_DISTRICTS)
-            ]
+                self.block_locs = [0 for i in range(self.NUM_BLOCKS*2)]
 
-            for i,district in enumerate(self.districts):
-                for j,block in enumerate(district[:min_active]):
-                    #self.districts[i][j] = block = self.place_block(self.occupied,active=True)
-                    #self.occupied[str(block)] = (i,j)
-                    self._update_state(i,j,None,self.place_block(self.occupied,active=True))
-                for k,block in enumerate(district[min_active:max_active],start=min_active):
-                    #self.districts[i][k] = block = self.place_block(self.occupied,active=None) # None-->don't force active, False-->force not active
-                    #self.occupied[str(block)] = (i,k)
-                    self._update_state(i,k,None,self.place_block(self.occupied,active=None))
-            self.precincts = self.evaluator.map_districts(self.districts)
-        return self.districts, self.precincts
+                for i in range(self.NUM_DISTRICTS):
+                    
+                    for j in range(min_active):
+                        loc = self.place_block(self.occupied, active=True)
+                        self.block_locs, self.occupied = self.get_updated_block_locs(2*(i*self.BLOCKS_PER_DISTRICT + j), None, loc, self.block_locs[:], deepcopy(self.occupied))
+                        
+                    for k in range(min_active,max_active):
+                        loc = self.place_block(self.occupied, active=None)
+                        #self.districts[i][k] = block = self.place_block(self.occupied,active=None) # None-->don't force active, False-->force not active
+                        #self.occupied[str(block)] = (i,k)
+                        self.block_locs, self.occupied = self.get_updated_block_locs(2*(i*self.BLOCKS_PER_DISTRICT + k), None, loc, self.block_locs[:], deepcopy(self.occupied))
+                assignments = self.get_updated_precincts(self.block_locs)
+            
+            self.precincts, self.district_list = assignments
+        return self.block_locs + self.precincts
 
     def render(self, mode='human'):
         """
