@@ -16,6 +16,17 @@ full_valid_state = [
     [[700,800],[751,800],[700,851]]
 ]
 
+invalid_eight_state = [
+    [[400,200],[691,800],[400,291]],
+    [[600,200],[451,200],[600,251]],
+    [[800,600],[151,200],[800,251]],
+    [[400,500],[451,500],[400,551]],
+    [[600,500],[651,500],[600,551]],
+    [[800,500],[851,500],[800,551]],
+    [[500,800],[551,800],[500,851]],
+    [[700,800],[751,800],[700,851]]
+]
+
 valid_four_state = [
      [[12,8]],
     [[16,8]],
@@ -58,8 +69,7 @@ class TestDistopiaEnv:
     def setup_class(self):
         print('setting up')
         self.ev = PopulationStdEvaluator()
-        for i in range(199):
-            self.de = DistopiaEnv((1920,1080),self.ev)
+        self.de = DistopiaEnv((1920,1080),self.ev)
 
     def teardown_class(self):
         print('tearing down')
@@ -82,11 +92,8 @@ class TestDistopiaEnv:
         # check to see that things got created correctly
         # check to see that the action space is right
         # check the dimensions of the state space
-        import pdb
-        pdb.set_trace()
-        
-        assert np.asarray(de.observation_space).shape == (de.NUM_DISTRICTS,de.BLOCKS_PER_DISTRICT,2)
-        assert np.asarray(de.districts).shape == (de.NUM_DISTRICTS,de.BLOCKS_PER_DISTRICT,2)
+        assert np.array_equal(de.observation_space.shape,(de.NUM_DISTRICTS*de.BLOCKS_PER_DISTRICT*2+de.NUM_PRECINCTS,))
+        assert np.array_equal(de.action_space.shape, (de.NUM_BLOCKS,))
         # check something about the voronoi
     # def test_update_state(self):
     #     #de = DistopiaEnv((1920,1080),'population',minimize_std)
@@ -180,25 +187,32 @@ class TestDistopiaEnv:
     #     assert np.all([len(obs_dict[district]) == 3 for district in obs_dict])
     #     assert np.all([np.array_equal(obs_dict[district], [block*self.de.GRID_WIDTH for block in self.de.districts[district]]) for district in obs_dict])
 
-    # def test_evaluate(self):
-    #     self.de = DistopiaEnv((1920,1080),self.ev,num_districts = 8)
-    #     self.de.reset(initial=scale_state(full_valid_state,self.de.GRID_WIDTH))
-    #     res = self.de.evaluate(self.de.districts)
-    #     assert res != False
-    #     self.de.reset(initial=empty_state)
-    #     res = self.de.evaluate(self.de.districts)
-    #     assert res == False
+    def test_reset(self):
+        no_voronoi = False
+        try:
+            self.de.reset(initial=scale_state(invalid_eight_state,self.de.GRID_WIDTH))
+        except AssertionError:
+            no_voronoi = True
+        assert no_voronoi == True
+    
+    def test_evaluate(self):
+        self.de = DistopiaEnv((1920,1080),self.ev,num_districts = 8)
+        self.de.reset(initial=scale_state(full_valid_state,self.de.GRID_WIDTH))
+        res = self.de.evaluate_current()
+        assert res != False
+        # self.de.reset(initial=scale_state(invalid_eight_state,self.de.GRID_WIDTH))
+        # res = self.de.evaluate_current()
+        # assert res == False
 
 
-    # def test_four_evaluate(self):
-    #     de = DistopiaEnv((1920,1080),self.ev,blocks_per_district=1,num_districts=4)
-    #     de.reset(initial=valid_four_state)
-    #     res = de.evaluate(de.districts)
-    #     import pdb
-    #     pdb.set_trace()
-    #     assert res != False
-    #     de.reset(initial=invalid_four_state)
-    #     import pdb
-    #     pdb.set_trace()
-    #     res = de.evaluate(de.districts)
-    #     assert res == False
+    def test_four_evaluate(self):
+        de = DistopiaEnv((1920,1080),self.ev,blocks_per_district=1,num_districts=4)
+        de.reset(initial=valid_four_state)
+        res = de.evaluate_current()
+        assert res > de.reward_range[0]
+        assert res <= de.reward_range[1]
+        de.reset(initial=invalid_four_state)
+        res = de.evaluate_current()
+        assert res == False #de.reward_range[0]
+
+    # TODO: Test apply_action (write a test case for the indexing, before I was multiplying by 2 twice.)

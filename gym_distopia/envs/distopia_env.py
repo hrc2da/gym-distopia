@@ -111,6 +111,7 @@ class DistopiaEnv(gym.Env):
     def get_staged_blocks_dict(self,block_locs):
         # refactored
         obs_dict = {}
+        added = {}
         for d in range(0,self.NUM_DISTRICTS):
             obs_dict[d] = []
             for b in range(0,self.BLOCKS_PER_DISTRICT):
@@ -118,14 +119,28 @@ class DistopiaEnv(gym.Env):
                 coords = [block_locs[index]*self.GRID_WIDTH,block_locs[index+1]*self.GRID_WIDTH]
                 if block_locs[index] > self.PADDING: # if the x is far enough to the right
                     obs_dict[d].append(coords)
+                assert self.hash_loc(coords) not in added # just double check to ensure we aren't passing two blocks in same loc
+                added[self.hash_loc(coords)] = (d,b)
+                
         return obs_dict
         # for i,district in enumerate(observation):
         #     obs_dict[i] = [block*self.GRID_WIDTH for block in district if block[0] > self.PADDING]
         # return obs_dict
 
-    # def evaluate(self,observation):
-    #     obs_dict = self.get_staged_blocks_dict(observation)
-    #     return self.evaluator.evaluate(obs_dict)
+    def evaluate_dist(self,districts):
+        return self.evaluator.evaluate(districts)
+
+    def evaluate_current(self):
+        return self.evaluator.evaluate(self.district_list)
+
+    def evaluate_block_locs(self, block_locs):
+        obs_dict = self.get_staged_blocks_dict(block_locs)
+        assignments = self.get_updated_precicnts(block_locs)
+        if assignments == False:
+            return self.reward_range[0]
+        else:
+            precincts,districts = assisgnments
+            return self.evaluator.evaluate(districts)
 
     def step(self, action):
         """
@@ -188,9 +203,9 @@ class DistopiaEnv(gym.Env):
         #occupied = deepcopy(self.occupied)
         block_locs[block_idx] = new_loc[0]
         block_locs[block_idx+1] = new_loc[1]
-        occupied[str(new_loc)] = block_idx
+        occupied[self.hash_loc(new_loc)] = block_idx
         if old_loc is not None: # note that is ! the same as == here; == tries to do a value compare, is does identity compare, so == fails b/c np array has no truth value
-            occupied.pop(str(old_loc))
+            occupied.pop(self.hash_loc(old_loc))
         return block_locs, occupied    
     
     def parse_precincts(self, district_list):
@@ -212,12 +227,14 @@ class DistopiaEnv(gym.Env):
             #     return district_list
             return self.parse_precincts(district_list), district_list
 
-    def _apply_action(self, block_id, action, block_locs, precincts, occupied):
+
+
+
+    def _apply_action(self, block_idx, action, block_locs, precincts, occupied):
         # refactored
         '''
         Inputs:
-            district: the district of the block to apply the action to
-            block: the block in that district to apply the action to
+            block_idx: the ACTUAL bloc_locs index of the x-coord (multiply your block_id by 2 before passing in)
             action: a number from {0,1,2,3,4} representing the action
         Updates:
             self.districts if possible to apply the action legally
@@ -227,8 +244,8 @@ class DistopiaEnv(gym.Env):
         '''
         success = False
         #block_location = self.districts[district][block]
-        block_x_idx = block_id * 2
-        block_y_idx = block_x + 1
+        block_x_idx = block_idx
+        block_y_idx = block_x_idx + 1
         block_x = block_locs[block_x_idx]
         block_y = block_locs[block_y_idx]
         if action == 0:
@@ -239,28 +256,28 @@ class DistopiaEnv(gym.Env):
             # move north
             target_x = block_x
             target_y = block_y + self.STEP_SIZE
-            if target_y > self.height or str([target_x,target_y]) in occupied:
+            if target_y > self.height or self.hash_loc([target_x,target_y]) in occupied:
                 return False
 
         elif action == 2:
             # move south
             target_x = block_x
             target_y = block_y - self.STEP_SIZE
-            if target_y < 0 or str([target_x,target_y]) in occupied:
+            if target_y < 0 or self.hash_loc([target_x,target_y]) in occupied:
                 return False
             
         elif action == 3:
             # move east
             target_x = block_x + self.STEP_SIZE
             target_y = block_y 
-            if target_x > self.width or str([target_x,target_y]) in occupied:
+            if target_x > self.width or self.hash_loc([target_x,target_y]) in occupied:
                 return False
 
         elif action == 4:
             # move west
             target_x = block_x - self.STEP_SIZE
             target_y = block_y
-            if target_x < 0 or str([target_x,target_y]) in occupied:
+            if target_x < 0 or self.hash_loc([target_x,target_y]) in occupied:
                 return False
 
         else:
@@ -307,14 +324,14 @@ class DistopiaEnv(gym.Env):
         for index in indices:
             # district = index // self.BLOCKS_PER_DISTRICT
             # block = index % self.BLOCKS_PER_DISTRICT
-            block_id = index * 2
-            res = self._apply_action(block_id,action[index],block_locs,precincts,occupied) 
+            block_idx = index * 2
+            res = self._apply_action(block_idx,action[index],block_locs,precincts,occupied) 
             if res is not False:
                 successes[index] = 1
                 if action[index] > 0:
                     changes += 1
                     block_locs, precincts, occupied, district_list = res
-            num_failures = sum(successes)
+            num_failures = len(successes) - sum(successes)
 
         if evaluate is True:
             if num_failures > 0:
@@ -356,10 +373,22 @@ class DistopiaEnv(gym.Env):
         yhigh = self.height
         x = np.random.randint(low=xlow, high=xhigh)
         y = np.random.randint(low=ylow, high=yhigh)
-        while str(np.asarray([x,y])) in occupied:
+        while self.hash_loc([x,y]) in occupied:
             x = np.random.randint(low=xlow, high=xhigh)
             y = np.random.randint(low=ylow, high=yhigh)
         return x, y
+
+    def hash_loc(self,loc):
+        loc_type = type(loc)
+        if loc_type is list:
+            return str(tuple(loc))
+        elif loc_type is tuple:
+            return str(loc)
+        elif loc_type is np.ndarray:
+            return str(tuple(loc))
+        else:
+            raise TypeError("Location should be a tuple or a list or a numpy array")
+
   
     def reset(self, initial=None, min_active=1, max_active=None, skip_next_reset = False):
         # refactored!
@@ -389,7 +418,7 @@ class DistopiaEnv(gym.Env):
                 for b in d:
                     self.block_locs.append(b[0])
                     self.block_locs.append(b[1])
-                    self.occupied[str(b)] = len(self.block_locs) - 1 # x-index 
+                    self.occupied[self.hash_loc(b)] = len(self.block_locs) - 1 # x-index 
             assignments = self.get_updated_precincts(self.block_locs)
             assert assignments is not False
             self.precincts, self.district_list = assignments
@@ -397,14 +426,18 @@ class DistopiaEnv(gym.Env):
             self.initial_blocks = deepcopy(self.block_locs)
             self.initial_precincts = deepcopy(self.precincts)
             self.initial_occupancy = deepcopy(self.occupied)
-            self.initial_district_list = deepcopy(self.district_list)
+            #TODO: I think this is ok: I NEVER access/update the district objects
+            # so I shouldn't need to deepcopy
+            # (the problem is that it won't deepcopy due to cython)
+            # as long as I COPY the array, I think I should be fine.
+            self.initial_district_list = self.district_list[:]
 
         elif self.always_reset_to_initial == True:
             print("resetting from start!")
             self.block_locs = deepcopy(self.initial_blocks)
             self.precincts = deepcopy(self.initial_precincts)
             self.occupied = deepcopy(self.initial_occupancy)
-            self.district_list = deepcopy(self.initial_district_list)
+            self.district_list = self.initial_district_list[:]
 
         else:
             if max_active is None:
@@ -466,15 +499,23 @@ class DistopiaEnv(gym.Env):
                     super(MyEnv, self).render(mode=mode) # just raise an exception
         """
         if mode == 'human':
-            for i,d in enumerate(self.districts):
-                x,y = zip(*d)
-                plt.scatter(x,y,label='D{}'.format(i))
-                plt.axvline(self.PADDING)
-                plt.legend(loc=0)
-                plt.title(self.last_action)
+            x = self.block_locs[:self.NUM_BLOCKS*2:2]
+            y = self.block_locs[1:self.NUM_BLOCKS*2+1:2]
+            plt.scatter(x,y)
+            plt.axvline(self.PADDING)
             plt.show(block=False)
             plt.pause(0.05)
             plt.clf()
+
+            # for i,d in enumerate(self.districts):
+            #     x,y = zip(*d)
+            #     plt.scatter(x,y,label='D{}'.format(i))
+            #     plt.axvline(self.PADDING)
+            #     plt.legend(loc=0)
+            #     plt.title(self.last_action)
+            # plt.show(block=False)
+            # plt.pause(0.05)
+            # plt.clf()
             #plt.close()
         else:
             # will raise an exception
