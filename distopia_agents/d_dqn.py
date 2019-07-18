@@ -117,14 +117,14 @@ class DistopiaDQN:
     def init_paths(self, in_path, out_path):
         self.in_path = in_path #if self.in_path != None else './'
         self.out_path = out_path if out_path != None else './'
-        self.log_path = "./logs/{}".format(time.time())
+        self.log_path = "{}/logs/".format(self.out_path)
         os.mkdir(self.log_path)
 
     def init_env(self,terminate_on_fail):
         self.env = gym.make(self.ENV_NAME)
         self.env.terminate_on_fail = terminate_on_fail
         self.env.record_path = "{}/ep_".format(self.log_path)
-        self.env = gym.wrappers.Monitor(self.env, "recording", force=True)
+        self.env = gym.wrappers.Monitor(self.env, self.out_path, force=True)
         np.random.seed(234)
         self.env.seed(234)
         self.nb_actions = np.sum(self.env.action_space.nvec)
@@ -186,7 +186,7 @@ class DistopiaDQN:
         # Okay, now it's time to learn something! We visualize the training here for show, but this
         # slows down training quite a lot. You can always safely abort the training prematurely using
         # Ctrl + C.
-        self.env._max_steps = max_steps
+        self.env.set_max_steps(max_steps)
         #for i in range(episodes):
         self.env.current_step = 0
         n_steps = max_steps*episodes

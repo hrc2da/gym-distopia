@@ -101,6 +101,10 @@ class DistopiaEnv(gym.Env):
         self.reset(initial=init_state, skip_next_reset=skip_first_reset) #passing skip flag to prevent auto-reset at the start of most agent episodes
 
 
+    def set_max_steps(self,max_steps):
+        # set max steps per episode:
+        self._max_steps = max_steps
+
     def dump_stats(self):
         with open("{}_{}.pkl".format(self.record_path,time.time()),'wb') as outfile:
             pickle.dump(self.stats,outfile)
@@ -526,6 +530,9 @@ class DistopiaEnv(gym.Env):
         Environments will automatically close() themselves when
         garbage collected or when the program exits.
         """
+        if len(self.stats) > 1 and self.record_path is not None:
+            self.dump_stats()
+            self.stats = []
 
     def seed(self, seed=None):
         """Sets the seed for this env's random number generator(s).

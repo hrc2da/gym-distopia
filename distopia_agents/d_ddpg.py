@@ -132,7 +132,7 @@ class DistopiaDDPG:
         # Okay, now it's time to learn something! We visualize the training here for show, but this
         # slows down training quite a lot. You can always safely abort the training prematurely using
         # Ctrl + C.
-        self.env._max_steps = max_steps
+        self.env.set_max_steps(max_steps)
         #for i in range(episodes):
         self.env.current_step = 0
         n_steps = max_steps*episodes
