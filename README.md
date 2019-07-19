@@ -3,7 +3,7 @@
 ## Installation
 
 init the distopia submodule:
-`git submodule init update`
+`git submodule update --init`
 make sure that the 'agent' branch is checked out in distopia
 
 make a virtualenv
