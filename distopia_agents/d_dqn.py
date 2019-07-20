@@ -176,7 +176,7 @@ class DistopiaDQN:
         #test_policy = PatchedGreedyQPolicy(num_actions = self.num_actions, num_blocks = self.num_blocks)
         #policy = BoltzmannQPolicy()
         policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                              nb_steps=100000)
+                              nb_steps=600000)
         test_policy = GreedyQPolicy()
         test_policy = GreedyQPolicy()
         self.dqn = DQNAgent(model=self.model, processor=processor, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=100, enable_double_dqn=True,
@@ -192,7 +192,7 @@ class DistopiaDQN:
         self.env.current_step = 0
         n_steps = max_steps*episodes
         logger = FileLogger(filepath='{}/{}.json'.format(self.out_path, self.ENV_NAME))
-        tensorboard = Tensorboard(log_dir='{}/{}'.format(self.out_path, self.ENV_NAME))
+        tensorboard = TensorBoard(log_dir='{}/{}'.format(self.out_path, self.ENV_NAME))
         self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=visualize, verbose=1, action_repetition=action_repetition, callbacks=[logger,tensorboard])
         #self.env.reset()
         
