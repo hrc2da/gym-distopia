@@ -6,7 +6,7 @@ from gym import wrappers
 from keras.models import Sequential, model_from_yaml
 from keras.layers import Dense, Activation, Flatten
 from keras.optimizers import Adam
-
+from keras.callbacks import TensorBoard
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy, GreedyQPolicy, EpsGreedyQPolicy, LinearAnnealedPolicy
 from rl.memory import SequentialMemory
@@ -192,7 +192,8 @@ class DistopiaDQN:
         self.env.current_step = 0
         n_steps = max_steps*episodes
         logger = FileLogger(filepath='{}/{}.json'.format(self.out_path, self.ENV_NAME))
-        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=visualize, verbose=1, action_repetition=action_repetition, callbacks=[logger])
+        tensorboard = Tensorboard(log_dir='{}/{}'.format(self.out_path, self.ENV_NAME))
+        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=visualize, verbose=1, action_repetition=action_repetition, callbacks=[logger,tensorboard])
         #self.env.reset()
         
         # After episode is done, we save the final weights.
