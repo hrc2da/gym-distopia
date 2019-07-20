@@ -21,7 +21,8 @@ register(
     kwargs = {
         'screen_size' : (1920,1080),
         'reward_evaluator' : PopulationStdEvaluator(),
-        'blocks_per_district' : 1,
+        'blocks_per_district' : 2,
+        'num_districts': 4,
         'step_size' : 1,
         # 'init_state': [
         #     [(12,6),(13,4)],
@@ -29,13 +30,17 @@ register(
         #     [np.asarray((20,15)),np.asarray((20,12))],
         #     [np.asarray((12,15)),np.asarray((13,12))],
         # ],
-        'init_state':[
-            [[12,8]],
-            [[16,8]],
-            [[15,15]],
-            [[12,15]]
-        ],
-        'always_reset_to_initial':True  
+        # 'init_state':[
+        #     [[8,8]],
+        #     [[8,9]],
+        #     [[9,8]],
+        #     [[9,9]],
+        #     [[7,8]],
+        #     [[8,7]],
+        #     [[7,7]],
+        #     [[7,9]],
+        # ],
+        # 'always_reset_to_initial':True  
     }
    
 )

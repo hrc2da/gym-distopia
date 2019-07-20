@@ -36,7 +36,7 @@ class DistopiaEnv(gym.Env):
     def __init__(self, screen_size, reward_evaluator, num_districts = 4, blocks_per_district = 3,
                     grid_width = 50, raw_padding = 100, num_directions = 5, step_size = 1, 
                     init_state = None, skip_first_reset = False, always_reset_to_initial = False, max_steps = 100, 
-                    record_path = None, terminate_on_fail = False):
+                    record_path = None, terminate_on_fail = False, revert_failures = True):
         '''
         OBSERVATION (STATE) SPACE:
         The state space for this environment is the x,y coordinates for each block PLUS the current district assignments for each county.
@@ -78,6 +78,7 @@ class DistopiaEnv(gym.Env):
         self.evaluator = reward_evaluator
         self.NUM_PRECINCTS = self.evaluator.num_precincts
         self.width, self.height = (dim//self.GRID_WIDTH for dim in screen_size)
+        self.revert_failures = revert_failures
         
         
         self.action_space = spaces.MultiDiscrete([self.NUM_DIRECTIONS for b in range(self.NUM_BLOCKS)])
@@ -177,6 +178,10 @@ class DistopiaEnv(gym.Env):
             if self.terminate_on_fail == True:
                 done = True # try this out--ending the episode if illegal action occurs
             info["error"] = "illegal voronoi"
+            if self.revert_failures == False:
+                # do it anyway
+                self.update_state(block_locs,precincts,occupied,district_list)
+                self.last_reward = reward
         else:
             self.update_state(block_locs,precincts,occupied,district_list)
             self.last_reward = reward
@@ -346,10 +351,14 @@ class DistopiaEnv(gym.Env):
             else:
                 evaluation = self.evaluator.evaluate(district_list)
                 if evaluation is False:
-                    block_locs = self.block_locs
-                    precincts = self.precincts
-                    occupied = self.occupied
-                    district_list = self.district_list
+                    if self.revert_failures == True: # or self.invalid_state == False:
+                        # don't allow illegal moves from a legal state
+                        block_locs = self.block_locs
+                        precincts = self.precincts
+                        occupied = self.occupied
+                        district_list = self.district_list
+                    else:
+                        print("moving through invalid state: {}".format(block_locs))
         else:
             evaluation = None
             

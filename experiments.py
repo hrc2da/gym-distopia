@@ -51,7 +51,7 @@ def make_note_file(path, info):
 @register
 def test_dqn_1(logging_path):
 	name = sys._getframe().f_code.co_name
-	n_eps = 5
+	n_eps = 10
 	steps_per_ep = 200
 	info = {
 		'experiment': name,
@@ -63,8 +63,8 @@ def test_dqn_1(logging_path):
 	print ("Experiment 1 ({}) here:{}".format(name,logging_path))
 	make_note_file(logging_path,info)
 
-	d = DistopiaDQN(reconstruct=True,terminate_on_fail=False, out_path=logging_path)
-	d.train(max_steps = steps_per_ep, episodes = n_eps)
+	d = DistopiaDQN(reconstruct=True,terminate_on_fail=False, out_path=logging_path, revert_failures=False)
+	d.train(max_steps = steps_per_ep, episodes = n_eps, visualize= True)
 
 
 
