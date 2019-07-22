@@ -22,7 +22,7 @@ register(
         'screen_size' : (1920,1080),
         'reward_evaluator' : PopulationStdEvaluator(),
         'blocks_per_district' : 2,
-        'num_districts': 4,
+        'num_districts': 8,
         'step_size' : 1,
         # 'init_state': [
         #     [(12,6),(13,4)],

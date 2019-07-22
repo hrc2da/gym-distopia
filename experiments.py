@@ -51,8 +51,8 @@ def make_note_file(path, info):
 @register
 def test_dqn_1(logging_path):
 	name = sys._getframe().f_code.co_name
-	n_eps = 10
-	steps_per_ep = 200
+	n_eps = 10000
+	steps_per_ep = 1000
 	info = {
 		'experiment': name,
 		'start_time': re.findall(r'[^_]*$',logging_path)[0],
