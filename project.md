@@ -22,3 +22,15 @@ with an agent trained on initial states sampled from the data used to train the 
 Note that Distopia provides a toy problem where the ground-truth (valid/invalid) is available to us. 
 SKN presents a more interesting problem where the structure of "reasonability" must be inferred.
 
+
+## GAN stuff
+* use sigmoid instead of tanh activation in generator (since values between 0 and 1)
+* move to Pytorch?
+* logging etc.
+
+## Agent Experiments
+* train w/ random restarts from valid samples
+* punishments? e.g. -1 for invalid move
+* build visualization pipeline
+* build up test suite
+* revamp checkpointing so we don't lose weights
