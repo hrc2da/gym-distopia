@@ -6,6 +6,7 @@ from gym import wrappers
 from keras.models import Sequential, Model, model_from_yaml
 from keras.layers import Dense, Activation, Flatten, Input, Concatenate
 from keras.optimizers import Adam
+from keras.callbacks import TensorBoard
 
 from rl.agents.dqn import DQNAgent
 from rl.policy import Policy
@@ -119,27 +120,28 @@ class DistopiaProcessor(Processor):
 
 # from the keras_rl docs
 
-class DistopiaDQN:
+class DistopiaRDQN:
    
-    def __init__(self,env_name='distopia-initial4-v0',in_path=None,out_path=None,terminate_on_fail=False,reconstruct=False):
+    def __init__(self,env_name='distopia-initial4-v0',in_path=None,out_path=None,terminate_on_fail=False,revert_failures=True,reconstruct=False):
         self.ENV_NAME = env_name
         self.filename = self.ENV_NAME
         self.init_paths(in_path,out_path)
-        self.init_env(terminate_on_fail)
+        self.init_env(terminate_on_fail,revert_failures)
         self.init_model(reconstruct)
         self.compile_agent()
 
     def init_paths(self, in_path, out_path):
         self.in_path = in_path #if self.in_path != None else './'
         self.out_path = out_path if out_path != None else './'
-        self.log_path = "./logs/{}".format(time.time())
+        self.log_path = "{}/logs/".format(self.out_path)
         os.mkdir(self.log_path)
 
-    def init_env(self,terminate_on_fail):
+    def init_env(self,terminate_on_fail,revert_failures):
         self.env = gym.make(self.ENV_NAME)
         self.env.terminate_on_fail = terminate_on_fail
+        self.env.revert_failures = revert_failures
         self.env.record_path = "{}/ep_".format(self.log_path)
-        self.env = gym.wrappers.Monitor(self.env, "recording", force=True)
+        self.env = gym.wrappers.Monitor(self.env, self.out_path, force=True)
         np.random.seed(234)
         self.env.seed(234)
         self.nb_actions = np.sum(self.env.action_space.nvec)
@@ -160,7 +162,7 @@ class DistopiaDQN:
         else:
         # Next, we build a very simple model.
             self.construct_model()
-        self.save_model()
+        #self.save_model()
         print(self.model.summary())
 
     def construct_model(self):
@@ -190,11 +192,11 @@ class DistopiaDQN:
         #test_policy = PatchedGreedyQPolicy(num_actions = self.num_actions, num_blocks = self.num_blocks)
         policy = RandomPolicy()
         test_policy = GreedyQPolicy()
-        self.dqn = DQNAgent(model=self.model, processor=processor, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=1000, enable_double_dqn=True,
+        self.dqn = DQNAgent(model=self.model, processor=processor, nb_actions=self.nb_actions, memory=memory, nb_steps_warmup=100, enable_double_dqn=True,
                     target_model_update=1e-2, policy=policy, test_policy=test_policy, gamma = 0.9)
         self.dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 
-    def train(self, max_steps = 100, episodes = 100):
+    def train(self, max_steps = 100, episodes = 100, visualize=False, action_repetition=1):
         # Okay, now it's time to learn something! We visualize the training here for show, but this
         # slows down training quite a lot. You can always safely abort the training prematurely using
         # Ctrl + C.
@@ -203,7 +205,8 @@ class DistopiaDQN:
         self.env.current_step = 0
         n_steps = max_steps*episodes
         logger = FileLogger(filepath='{}/{}.json'.format(self.out_path, self.ENV_NAME))
-        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=False, verbose=1, callbacks=[logger])
+        tensorboard = TensorBoard(log_dir='{}/{}'.format(self.out_path, self.ENV_NAME))
+        self.dqn.fit(self.env, nb_steps = n_steps, nb_max_episode_steps=max_steps, visualize=visualize, verbose=1, action_repetition=action_repetition, callbacks=[logger,tensorboard])
         #self.env.reset()
         
         # After episode is done, we save the final weights.
@@ -216,7 +219,7 @@ class DistopiaDQN:
 
 
 if __name__ == '__main__':
-    d = DistopiaDQN(reconstruct=True,terminate_on_fail=False)
+    d = DistopiaRDQN(reconstruct=True,terminate_on_fail=False)
     #lsd.dqn.load_weights('{}/{}.h5'.format(d.out_path,d.ENV_NAME))
     d.train(episodes=1000)
     #d.test()

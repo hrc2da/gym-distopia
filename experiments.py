@@ -16,6 +16,7 @@ import re
 import sys
 
 from distopia_agents.d_dqn import DistopiaDQN
+from distopia_agents.d_random import DistopiaRDQN
 
 experiments = {}
 parser = argparse.ArgumentParser(description='Run experiments.')
@@ -64,15 +65,29 @@ def test_dqn_1(logging_path):
 	make_note_file(logging_path,info)
 
 	d = DistopiaDQN(reconstruct=True,terminate_on_fail=False, out_path=logging_path, revert_failures=False)
-	d.train(max_steps = steps_per_ep, episodes = n_eps, visualize= True)
+	d.train(max_steps = steps_per_ep, episodes = n_eps, visualize= False)
 
 
 
 
   
 @register
-def test_dqn2_2(logging_path):
-	print ("Experiment 2 here{}".format(logging_path))
+def test_random_1(logging_path):
+	name = sys._getframe().f_code.co_name
+	n_eps = 10000
+	steps_per_ep = 1000
+	info = {
+		'experiment': name,
+		'start_time': re.findall(r'[^_]*$',logging_path)[0],
+		'n_eps': n_eps,
+		'steps_per_ep': steps_per_ep,
+		'policy': "Random Policy"
+	}
+	print ("Experiment 2 ({}) here:{}".format(name,logging_path))
+	make_note_file(logging_path,info)
+
+	d = DistopiaRDQN(reconstruct=True,terminate_on_fail=False, out_path=logging_path, revert_failures=False)
+	d.train(max_steps = steps_per_ep, episodes = n_eps, visualize= False)
 ###
 
 def setup(exp):
