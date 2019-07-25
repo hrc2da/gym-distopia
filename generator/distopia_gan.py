@@ -19,14 +19,14 @@ class DistopiaGAN:
     blocks_per_district = 2
     noise_dim = 8
     batch_size = 500
-    state_shape = num_districts*blocks_per_district*2
+    state_shape = num_districts * blocks_per_district * 2
     padding = 100
 
     def __init__(self, data_path):
 
         self.voronoi = VoronoiAgent()
         self.voronoi.load_data()
-        #self.trim_data(data_path)
+        # self.trim_data(data_path)
         self.load_data(data_path, check=False)
 
         self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
@@ -41,7 +41,7 @@ class DistopiaGAN:
         x = self.generator(gan_input)
         gan_output = self.discriminator(x)
         self.gan = Model(inputs=gan_input, outputs=gan_output)
-        self.gan.compile(loss='binary_crossentropy', optimizer=self.generator_optimizer)
+        self.gan.compile(loss="binary_crossentropy", optimizer=self.generator_optimizer)
         # checkpoint_dir = './training_checkpoints'
         # checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
         # self.checkpoint = tf.train.Checkpoint(generator_optimizer=self.generator_optimizer,
@@ -49,24 +49,24 @@ class DistopiaGAN:
         #                                 generator=self.generator,
         #                                 discriminator=self.discriminator)
 
-    def trim_data(self,path):
+    def trim_data(self, path):
         real_samples = []
         valid_samples = []
         sampled = {}
         with open(path) as infile:
             real_samples = json.load(infile)
             counter = 0
-            for i,sample in enumerate(real_samples):
+            for i, sample in enumerate(real_samples):
                 if self.check_validity(sample) == True:
                     counter += 1
                     valid_samples.append(sample)
-                if i%500 == 0:
+                if i % 500 == 0:
                     print("Valid Samples: {} out of {}".format(counter, i))
             print("Valid Samples: {} out of {}".format(counter, len(real_samples)))
         with open("trimmed.json", "w+") as outfile:
-            json.dump(valid_samples,outfile)
-    
-    def load_data(self,path,check=False):
+            json.dump(valid_samples, outfile)
+
+    def load_data(self, path, check=False):
         self.real_samples = []
         self.sampled = {}
         # with open(path) as infile:
@@ -94,30 +94,37 @@ class DistopiaGAN:
                         counter += 1
                 print(counter)
                 assert counter == 0
-        self.dataset = []#tf.data.Dataset.from_tensor_slices(self.real_samples).shuffle(len(self.real_samples)).batch(self.batch_size)
-        num_batches = len(self.real_samples)//self.batch_size + 1
-        for i in range(num_batches-1):
-            self.dataset.append(self.real_samples[i*self.batch_size:(i+1)*self.batch_size])
+        self.dataset = (
+            []
+        )  # tf.data.Dataset.from_tensor_slices(self.real_samples).shuffle(len(self.real_samples)).batch(self.batch_size)
+        num_batches = len(self.real_samples) // self.batch_size + 1
+        for i in range(num_batches - 1):
+            self.dataset.append(
+                self.real_samples[i * self.batch_size : (i + 1) * self.batch_size]
+            )
         # add the last separately in case there is not enough
-        self.dataset.append(self.real_samples[(num_batches-1)*self.batch_size:])
+        self.dataset.append(self.real_samples[(num_batches - 1) * self.batch_size :])
 
-
-
-    def construct_layout(self,block_locs):
+    def construct_layout(self, block_locs):
         obs_dict = {}
-        #added = {} taken out to allow for double blocks in gan--note that voronoi should fail so it should be fine
-        for d in range(0,self.num_districts):
+        # added = {} taken out to allow for double blocks in gan--note that voronoi should fail so it should be fine
+        for d in range(0, self.num_districts):
             obs_dict[d] = []
-            for b in range(0,self.blocks_per_district):
-                index = 2*(d*self.blocks_per_district + b)
-                coords = [block_locs[index],block_locs[index+1]] # already in pixel space
-                if block_locs[index] > self.padding: # if the x is far enough to the right
+            for b in range(0, self.blocks_per_district):
+                index = 2 * (d * self.blocks_per_district + b)
+                coords = [
+                    block_locs[index],
+                    block_locs[index + 1],
+                ]  # already in pixel space
+                if (
+                    block_locs[index] > self.padding
+                ):  # if the x is far enough to the right
                     obs_dict[d].append(coords)
-                #assert self.hash_loc(coords) not in added # just double check to ensure we aren't passing two blocks in same loc
-                #added[self.hash_loc(coords)] = (d,b)
+                # assert self.hash_loc(coords) not in added # just double check to ensure we aren't passing two blocks in same loc
+                # added[self.hash_loc(coords)] = (d,b)
         return obs_dict
 
-    def hash_loc(self,loc):
+    def hash_loc(self, loc):
         loc_type = type(loc)
         if loc_type is list:
             return str(tuple(loc))
@@ -128,16 +135,18 @@ class DistopiaGAN:
         else:
             raise TypeError("Location should be a tuple or a list or a numpy array")
 
-    def check_validity(self,layout):
+    def check_validity(self, layout):
         layout_dict = self.construct_layout(layout)
         districts = self.voronoi.get_voronoi_districts(layout_dict)
         if len(districts) < self.num_districts:
             return False
         try:
-            state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(districts)
-            
+            state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(
+                districts
+            )
+
         except Exception as e:
-            print("Couldn't compute Voronoi for {}:{}".format(districts,e))
+            print("Couldn't compute Voronoi for {}:{}".format(districts, e))
             return False
         # try:
         #     objectives = self.extract_objectives(district_metrics)
@@ -146,7 +155,6 @@ class DistopiaGAN:
         #     print("Problem calculating the metrics: {}".format(v))
         #     return False
         return True
-
 
     def build_generator(self):
         self.generator = Sequential()
@@ -159,10 +167,11 @@ class DistopiaGAN:
         self.generator.add(Dense(32))
         self.generator.add(LeakyReLU(alpha=0.2))
         self.generator.add(BatchNormalization(momentum=0.8))
-        self.generator.add(Dense(self.state_shape, activation='tanh'))
-        self.generator.compile(loss='binary_crossentropy', optimizer=self.generator_optimizer)
+        self.generator.add(Dense(self.state_shape, activation="tanh"))
+        self.generator.compile(
+            loss="binary_crossentropy", optimizer=self.generator_optimizer
+        )
         self.generator.summary()
-
 
     def build_discriminator(self):
         self.discriminator = Sequential()
@@ -172,13 +181,14 @@ class DistopiaGAN:
         self.discriminator.add(LeakyReLU(alpha=0.2))
         self.discriminator.add(Dense(8))
         self.discriminator.add(LeakyReLU(alpha=0.2))
-        self.discriminator.add(Dense(1, activation='sigmoid'))
-        self.discriminator.compile(loss='binary_crossentropy', optimizer=self.discriminator_optimizer)
+        self.discriminator.add(Dense(1, activation="sigmoid"))
+        self.discriminator.compile(
+            loss="binary_crossentropy", optimizer=self.discriminator_optimizer
+        )
         self.discriminator.summary()
 
     def generator_loss(fake_output):
         return self.cross_entropy(tf.ones_like(fake_output), fake_output)
-
 
     def discriminator_loss(real_output, fake_output):
         real_loss = self.cross_entropy(tf.ones_like(real_output), real_output)
@@ -192,9 +202,9 @@ class DistopiaGAN:
         generated_layouts = self.generator.predict(noise)
         X = np.concatenate([real_layouts, generated_layouts])
         # Labels for generated and real data
-        y_dis = np.zeros(len(real_layouts)+self.batch_size)
+        y_dis = np.zeros(len(real_layouts) + self.batch_size)
         # One-sided label smoothing
-        y_dis[:len(real_layouts)] = 0.9
+        y_dis[: len(real_layouts)] = 0.9
 
         # Train discriminator
         self.discriminator.trainable = True
@@ -224,8 +234,6 @@ class DistopiaGAN:
         #     self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, discriminator.trainable_variables))
         return dis_loss, gen_loss
 
-
-
     def train(self, epochs):
         logfile = open("generator_log.csv", "w+")
         for epoch in range(epochs):
@@ -233,15 +241,15 @@ class DistopiaGAN:
             shuffle(self.dataset)
 
             for image_batch in self.dataset:
-                dl,ganl = self.train_step(image_batch)
-            
+                dl, ganl = self.train_step(image_batch)
+
             noise = np.random.normal(0, 1, size=[self.batch_size, self.noise_dim])
             generated_layouts = self.generator.predict(noise)
             valid_count = 0
             for layout in generated_layouts:
                 if self.check_validity(layout) == True:
                     valid_count += 1
-            gl = valid_count/len(generated_layouts)
+            gl = valid_count / len(generated_layouts)
 
             # # Produce images for the GIF as we go
             # display.clear_output(wait=True)
@@ -253,20 +261,25 @@ class DistopiaGAN:
             # if (epoch + 1) % 15 == 0:
             #     self.checkpoint.save(file_prefix = checkpoint_prefix)
 
-            print ('Time for epoch {} is {} sec'.format(epoch + 1, time.time()-start))
-            print ('Final Discriminator Loss: {}, Final Generator Loss: {}, Final GAN Loss: {}'.format(dl,gl, ganl))
-            logfile.write("{},{},{}\n".format(dl,gl, ganl))
+            print("Time for epoch {} is {} sec".format(epoch + 1, time.time() - start))
+            print(
+                "Final Discriminator Loss: {}, Final Generator Loss: {}, Final GAN Loss: {}".format(
+                    dl, gl, ganl
+                )
+            )
+            logfile.write("{},{},{}\n".format(dl, gl, ganl))
         # # Generate after the final epoch
         # display.clear_output(wait=True)
         # self.generate_and_save_images(generator,
         #                         epochs,
         #                         seed)
         logfile.close()
+
     # def generate_and_save_images(self,generator,epochs,seed):
     #     ...
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     gan = DistopiaGAN("/home/dev/scratch/gym-distopia/generator/trimmed.json")
     gan.train(10000)
-    
+
