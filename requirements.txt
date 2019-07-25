@@ -13,14 +13,12 @@ constantly==15.1.0
 cryptography==2.7
 cycler==0.10.0
 Cython==0.29.11
--e git+https://github.com/hrc2da/distopia@4852a3cdcc38511cf034b1194dbeea67e9af8ee9#egg=Distopia&subdirectory=../../distopia
 docutils==0.14
 future==0.17.1
 gast==0.2.2
 google-pasta==0.1.7
 grpcio==1.22.0
 gym==0.13.1
--e git+https://github.com/hrc2da/gym-distopia@e5a837f32967fec65eca1501132f4ac1ff504b12#egg=gym_distopia
 h5py==2.9.0
 hyperlink==19.0.0
 idna==2.8
@@ -60,6 +58,8 @@ tensorboard==1.14.0
 tensorflow-estimator==1.14.0
 tensorflow-gpu==1.14.0
 termcolor==1.1.0
+torch==1.1.0.post2 
+torchvision==0.3.0  
 Twisted==19.2.1
 txaio==18.8.1
 urllib3==1.25.3
