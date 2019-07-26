@@ -1,5 +1,9 @@
 # Distopia Projects
 
+## Overview
+Design tasks tend to have sparse state spaces in ways that can be hard to model. For example, among the millions of combinations of food ingredients, only a few can form the basis of useful recipes, whether due to chemistry, practicality, or taste. Humans are very good at navigating this sparseness, and, in the context of human-AI collaborative design, it may be a waste to train AI agents to do so, instead of relying on the human to keep the search "reasonable". In this work, we propose a method to train AI design agents that only know how to optimize over such reasonable designs. We evaluate how this affects learning speed and convergence, and test the relative performance of agents trained this way in a collaborative setting.
+
+
 ## Reasonable Design States for RL
 In design tasks, the state space is typically larger than the set of "reasonable" designs. 
 
