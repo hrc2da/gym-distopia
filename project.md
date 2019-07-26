@@ -31,7 +31,11 @@ However, we argue that, if the agent is only meant to collaborate with the human
 Concerns: Some of this difficulty is the result of the shared interface, as opposed to the problem itself. This is less of a problem in the kitchen domain. Also, maybe there is value in teaching the agent to escape bad states--how do we quantify the potential value this could offer and whether it is worth the extra training time?
 
 ## Reasonable Design in SKN
+Sophie's Kitchen Nightmares is a restaurant simulation game. Using the same block-based interface as Distopia, SKN designers lay out kitchen appliances and furniture to construct a restaurant, balancing outcomes like profit and customer ratings. 
 
+
+## Additional Questions
+If we have a measure of "reasonableness" or "appropriateness", especially one driven by human-generated data, should we also use this to augment the reward? This recalls prior work on reward-shaping via preference learning. Note that a big difference between our approaches is that cherry-picking start states optimizes limited training time, reducing the policy space by ignoring policies that account for invalid start states. However, it does nothing to encourage the agent to avoid invalid or unreasonable states. Preference learning (and our future work on problem framing) does the latter. However, we can possibly support preference learning by providing access to a latent-space model of reasonable designs, e.g. by adding the discriminator to the reward function.
 
 
 ## GAN stuff
