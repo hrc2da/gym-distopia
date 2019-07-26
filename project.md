@@ -22,6 +22,17 @@ with an agent trained on initial states sampled from the data used to train the 
 Note that Distopia provides a toy problem where the ground-truth (valid/invalid) is available to us. 
 SKN presents a more interesting problem where the structure of "reasonability" must be inferred.
 
+## Reasonable Design in Distopia
+Distopia is a user interface that lets human designers draw voting districts. From a human perspective, Distopia's main challenges involve figuring out what factors play into fair districts and how they interact with each other. When training a collaborative agent, however, we found that the agent spends a lot of time exploring configurations that are trivially unacceptable. For example, it is possible to draw less than 8 districts, or to leave out certain precincts, or to make non-contiguous districts. All of these characteristics invalidate a design, and a human, with feedback from the interface, is able to mostly avoid these pitfalls when searching. However, with random starting states (which is necessary given the large design space), the agent has to learn how to both avoid these states, and how to escape them when it encounters them.
+
+One solution to could be to encode these constraints in the reward. Eventually, the agent would learn not to create designs that violate these constraints. The agent would also ideally learn how to recover from designs that violate these constraints.
+However, we argue that, if the agent is only meant to collaborate with the human, and the human is trivially able to avoid and correct these invalid states, then it is a waste of time to learn a policy over this more difficult reward. We should, of course, still teach the agent not to go towards unacceptable states; however, we don't need to teach it how to escape, which could save a lot of training time.
+
+Concerns: Some of this difficulty is the result of the shared interface, as opposed to the problem itself. This is less of a problem in the kitchen domain. Also, maybe there is value in teaching the agent to escape bad states--how do we quantify the potential value this could offer and whether it is worth the extra training time?
+
+## Reasonable Design in SKN
+
+
 
 ## GAN stuff
 * use sigmoid instead of tanh activation in generator (since values between 0 and 1)
