@@ -34,24 +34,6 @@ def load_data(path, batch_size=32):
     return data_loader
 
 
-def construct_layout(block_locs):
-    obs_dict = {}
-    # added = {} taken out to allow for double blocks in gan--note that voronoi should fail so it should be fine
-    for d in range(0, NUM_DISTRICTS):
-        obs_dict[d] = []
-        for b in range(0, BLOCKS_PER_DISTRICT):
-            index = 2 * (d * BLOCKS_PER_DISTRICT + b)
-            coords = [
-                block_locs[index],
-                block_locs[index + 1],
-            ]  # already in pixel space
-            if block_locs[index] > 100:  # if the x is far enough to the right
-                obs_dict[d].append(coords)
-            # assert self.hash_loc(coords) not in added # just double check to ensure we aren't passing two blocks in same loc
-            # added[self.hash_loc(coords)] = (d,b)
-    return obs_dict
-
-
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
@@ -85,29 +67,96 @@ class FlatGAN:
         self.D = Discriminator()
         self.g_optim = optim.Adam(self.G.parameters())
         self.d_optim = optim.Adam(self.D.parameters())
-        self.data_loader = load_data("data/trimmed.json", batch_size=16)
+        self.data_loader = load_data("trimmed3.json", batch_size=16)
         self.voronoi = VoronoiAgent()
         self.voronoi.load_data()
+        self.num_precincts = 72
+        self.padding = 100
+        self.scalar = (1920, 1080)
 
-    def check_validity(self, config):
-        config = config.reshape(16, 2)
-        config[:, 0] *= 1920
-        config[:, 1] *= 1080
-        config = config.reshape(32)
-        layout = construct_layout(config)
-        districts = self.voronoi.get_voronoi_districts(layout)
+    def check_validity(self, layout, scalar=None, bypass=[]):
 
-        if len(districts) < NUM_DISTRICTS:
-            return 0
+        if scalar is None:
+            if hasattr(self, "scalar"):
+                scalar = self.scalar
+            else:
+                scalar = 1
+
+        layout_dict = self.construct_layout(layout, scalar)
+        districts = self.voronoi.get_voronoi_districts(layout_dict)
+        #import pdb; pdb.set_trace()
+        if len(districts) == 0 and 'empty' not in bypass:
+            print("zero districts! probably voronoi falure!")
+            # self.failed_voronoi.append(layout)
+            return False
+        if len(districts) < NUM_DISTRICTS and 'missing_districts' not in bypass:
+            print("missing districts! less than 8 districts found!")
+            # self.missing_districts.append(layout)
+            return False
+        assigned_precincts = 0
+        for i, d in enumerate(districts):
+            if len(d.precincts) < 1:
+                print("empty district {} (1-indexed)!".format(i+1))
+                # self.empty_district.append(layout)
+                return False
+            assigned_precincts += len(d.precincts)
+
+        if assigned_precincts < self.num_precincts:
+            print("missing precincts! only assigned {}.".format(assigned_precincts))
+            # self.missing_precinct.append(layout)
+            return False
         try:
             state_metrics, district_metrics = self.voronoi.compute_voronoi_metrics(
                 districts
             )
+
         except Exception as e:
             print("Couldn't compute Voronoi for {}:{}".format(districts, e))
-            return 0
+            return False
 
-        return 1
+        # try:
+        #     objectives = self.extract_objectives(district_metrics)
+        #     #print("{}:{}".format(self.n_calls,cost))
+        # except ValueError as v:
+        #     print("Problem calculating the metrics: {}".format(v))
+        #     return False
+        return True
+
+    def construct_layout(self, block_locs, scalar=1):
+        '''
+            input: [x0,y0,x1,y1,....,xn,yn]
+
+                    scalar: if even scale, just a scalar, if x/y, then (x,y) tuple
+                    for example: if in grid space, we are going to scale up to pixels, so scalar=grid_width
+                        if in pixels, no scale
+                        if in normalized 0-1: scale is (1920,1080)
+
+            output is in pixels w/ staging area blocks removed:
+            {0:[[x0*scale_x,y0*scale_y],[x1*scale_x,y1*scale_y]], 1:[[x3*scale_x,y3*scale_y]]...,7:[[xn*scale_x,yn*scale_y]]}
+        '''
+        if type(scalar) == list or type(scalar) == tuple or type(scalar) == np.ndarray:
+            scale_x = scalar[0]
+            scale_y = scalar[1]
+        else:
+            scale_x = scale_y = scalar
+        obs_dict = {}
+        # added = {} taken out to allow for double blocks in gan--note that voronoi should fail so it should be fine
+        for d in range(0, NUM_DISTRICTS):
+            obs_dict[d] = []
+            for b in range(0, BLOCKS_PER_DISTRICT):
+                index = 2 * (d * BLOCKS_PER_DISTRICT + b)
+                coords = [
+                    (block_locs[index])*scale_x,  # +1 * 0.5 to rescale from -1,1 to 0,1 then to pixls
+                    (block_locs[index + 1])*scale_y,
+                ]  # already in pixel space
+                if (
+                    (block_locs[index])*scale_x > self.padding  # padding is in pixel scale
+                ):  # if the x is far enough to the right
+                    obs_dict[d].append(coords)
+                # assert self.hash_loc(coords) not in added # just double check to ensure we aren't passing two blocks in same loc
+                # added[self.hash_loc(coords)] = (d,b)
+
+        return obs_dict
 
     def train(self, n_epochs):
         valid_states = []
@@ -177,4 +226,3 @@ class FlatGAN:
 
 gan = FlatGAN()
 gan.train(25)
-
