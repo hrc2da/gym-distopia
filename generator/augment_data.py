@@ -31,7 +31,7 @@ def augment_assignments(assignments, index_permutations):
         for perm in index_permutations:
             augmented_data[i] = assignment[perm]
             i += 1
-    np.save("data/augmented_data.npy", augmented_data)
+    np.save("data/augmented_trimmed_3.npy", augmented_data)
 
 
 def limited_augment_assignments(assignments, index_permutations, num_augments):
@@ -55,9 +55,9 @@ def limited_augment_assignments(assignments, index_permutations, num_augments):
     np.save("data/limited_augmented_data.npy", augmented_data)
 
 
-data = load_data("data/trimmed.json")
+data = load_data("trimmed3.json")
 n_samples, _ = data.shape
 data = data.reshape(n_samples, NUM_DISTRICTS, BLOCKS_PER_DISTRICT, 2)
 indices = list(range(8))
 index_perms = np.array(list(multiset_permutations(indices)))
-limited_augment_assignments(data[0:600], index_perms, 100)
+limited_augment_assignments(data, index_perms, 100)

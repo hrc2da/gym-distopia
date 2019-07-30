@@ -28,7 +28,7 @@ def plot_boundary(boundary_paths, raw_data, index):
     plt.ylim(0, 1080)
     plt.xlim(-100, 1920)
     plt.show(block=False)
-    plt.pause(0.05)
+    plt.pause(0.025)
     plt.clf()
     plt.savefig("results/img/"+str(time.time())+".png")
 
@@ -60,7 +60,11 @@ def test_pt(points, index):
     for district in districts:
         if district.precincts == []:
             return False
-        boundaries.append(district.boundary)
+        p_boundaries = []
+        for p in district.precincts:
+            p_boundaries += p.boundary
+        # boundaries.append(district.boundary)
+        boundaries.append(p_boundaries)
     plot_boundary(boundaries, points, index)
     return True
 
@@ -85,7 +89,7 @@ def load_pkl(path):
 
 if __name__ == "__main__":
     # pt = int(sys.argv[1])
-    raw_data = load_data("trimmed3.json")[500:]
+    raw_data = load_data("data/merged.json")[600:]
     # raw_data = load_pkl("results/generated_valid_states.pickle")
     count = 0
     for pt in range(len(raw_data)):
